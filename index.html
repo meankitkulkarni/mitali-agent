@@ -667,6 +667,9 @@ let activeOrder=null, curRepType='replace';
 let holdTimer=null;
 let selectedDueIds=[];
 let collectDuesOnly=false;
+let reviewOrderDraft={};
+let currentScreen='s-home';
+let touchStartX=0,touchStartY=0;
 const UPI_QR_FILES=['./assets/qr-code.jpg','./assets/upi-qr.png','./assets/payment-qr.png','./assets/qr.png','./assets/qrcode.png'];
 function sortSkus(){
   SKUS.sort((a,b)=>((a.sortOrder??999999)-(b.sortOrder??999999))||String(a.name||'').localeCompare(String(b.name||'')));
@@ -694,6 +697,7 @@ const NO_NAV=['s-sku','s-review','s-detail','s-upi-pay'];
 // BOOT
 // ════════════════════════════════════
 function init() {
+  history.replaceState({screen:'s-home'},'',location.href);
   const now = new Date();
   const todayKey=now.toISOString().slice(0,10);
   document.getElementById('home-date').textContent =
@@ -757,22 +761,52 @@ function init() {
 // ════════════════════════════════════
 // SCREENS
 // ════════════════════════════════════
-function showS(id) {
+function setActiveNavForScreen(id){
+  const tab={ 's-home':'home','s-orders':'orders','s-stock':'stock','s-expenses':'expenses' }[id];
+  if(!tab)return;
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+  const el=document.getElementById('nav-'+tab);if(el)el.classList.add('active');
+}
+function showS(id, opts={}) {
+  const push=opts.push!==false;
+  if(currentScreen===id&&document.getElementById(id)?.classList.contains('active'))return;
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
   document.getElementById('bottom-nav').style.display = NO_NAV.includes(id)?'none':'flex';
+  currentScreen=id;
+  setActiveNavForScreen(id);
+  if(push&&history.state?.screen!==id)history.pushState({screen:id},'',location.href);
 }
 function navTo(tab) {
   const map={home:'s-home',orders:'s-orders',stock:'s-stock',expenses:'s-expenses'};
   showS(map[tab]);
-  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
-  document.getElementById('nav-'+tab).classList.add('active');
 }
 function goHome() {
   showS('s-home');
-  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
-  document.getElementById('nav-home').classList.add('active');
 }
+function appBack(){
+  if(document.getElementById('stock-sheet')?.classList.contains('open')){closeStockEntry();return;}
+  if(currentScreen==='s-upi-pay'){openDetail(activeOrder&&activeOrder.id);return;}
+  if(currentScreen==='s-detail'){showS('s-orders');return;}
+  if(currentScreen==='s-review'){showS('s-sku');return;}
+  if(currentScreen==='s-sku'){goHome();return;}
+  if(currentScreen!=='s-home'){goHome();return;}
+}
+window.addEventListener('popstate',e=>{
+  const id=e.state&&e.state.screen;
+  if(id&&document.getElementById(id))showS(id,{push:false});
+  else appBack();
+});
+document.addEventListener('touchstart',e=>{
+  if(e.touches.length!==1)return;
+  touchStartX=e.touches[0].clientX;touchStartY=e.touches[0].clientY;
+},{passive:true});
+document.addEventListener('touchend',e=>{
+  if(!touchStartX)return;
+  const dx=e.changedTouches[0].clientX-touchStartX,dy=Math.abs(e.changedTouches[0].clientY-touchStartY);
+  if(touchStartX<36&&dx>80&&dy<55){e.preventDefault();appBack();}
+  touchStartX=0;touchStartY=0;
+},{passive:false});
 
 // ════════════════════════════════════
 // HOLD-TO-REPEAT for qty buttons
@@ -942,9 +976,11 @@ function goToReview(){
 function buildReview(){
   const entries=Object.entries(curOrder);
   if(!entries.length){
+    reviewOrderDraft={};
     document.getElementById('review-items').innerHTML=`<div style="padding:16px;font-size:14px;color:var(--text2);">No items added yet.</div>`;
     document.getElementById('review-total').textContent='Rs. 0'; return;
   }
+  reviewOrderDraft=JSON.parse(JSON.stringify(curOrder));
   let grand=0,html='';
   for(const[skuId,data] of entries){
     const sku=SKUS.find(s=>s.id===skuId);
@@ -966,6 +1002,7 @@ function selPay(mode){
 function isPaymentReceived(o){
   return o&&o.payment!=='credit'&&o.paymentStatus!=='pending';
 }
+function isPaymentPending(o){return !isPaymentReceived(o);}
 function paymentStatusText(o){
   if(!o) return '—';
   if(o.payment==='credit') return 'Pending';
@@ -996,6 +1033,7 @@ function orderDisplayId(o){return (o&&o.orderNo)||((o&&o.id)||'');}
 
 // ── SAVE ORDER ──
 async function saveOrder(){
+  if(!Object.keys(curOrder).length&&Object.keys(reviewOrderDraft).length)curOrder=JSON.parse(JSON.stringify(reviewOrderDraft));
   const entries=Object.entries(curOrder);
   if(!entries.length){toast('Add at least one item');return;}
   let grand=0; const lines=[];
