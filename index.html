@@ -7,7 +7,6 @@
 <link rel="icon" type="image/png" href="./assets/mitali-logo.png"/>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
-<script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -435,7 +434,7 @@ select.form-field{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
     </div>
     <div class="sec-label">Note</div>
     <textarea class="note-input" id="order-note" placeholder="Optional note..."></textarea>
-    <button class="btn-primary" onclick="saveOrder()">Save Order & Generate Invoice</button>
+    <button class="btn-primary" onclick="saveOrder()">Save Order & Open Invoice</button>
     <button class="btn-secondary" onclick="showS('s-sku')">Edit Order</button>
     <div style="height:8px;"></div>
   </div>
@@ -880,7 +879,7 @@ function selPay(mode){
 }
 
 // ── SAVE ORDER ──
-function saveOrder(){
+async function saveOrder(){
   const entries=Object.entries(curOrder);
   if(!entries.length){toast('Add at least one item');return;}
   let grand=0; const lines=[];
@@ -903,10 +902,19 @@ function saveOrder(){
     time:new Date().toISOString(),
   };
   // Save to Firestore (Admin will see it in real-time)
-  db.collection('orders').doc(order.id).set(order).catch(console.error);
+  try{
+    await db.collection('orders').doc(order.id).set(order);
+  }catch(err){
+    console.error(err);
+    toast('Order save failed');
+    return;
+  }
   orders.unshift(order);
   renderMerchants(); renderOrders(); renderStock(); updateStats();
-  toast('Order saved'); navTo('home');
+  curOrder={};
+  activeOrder=order;
+  toast('Order saved');
+  openDetail(order.id);
 }
 
 // ════════════════════════════════════
