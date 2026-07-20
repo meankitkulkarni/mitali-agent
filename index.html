@@ -649,7 +649,7 @@ let MERCHANTS = [];
   try{
     const lp=JSON.parse(localStorage.getItem('mb_admin_skus')||'[]');
     const lm=JSON.parse(localStorage.getItem('mb_admin_merchants')||'[]');
-    if(lp.length) SKUS.push(...lp.map(p=>({id:p.id,name:p.name,price:p.sale,retail:p.retail||p.sale,stock:p.stock||0})));
+    if(lp.length){SKUS.push(...lp.map(p=>({id:p.id,name:p.name,price:p.sale,retail:p.retail||p.sale,stock:p.stock||0,sortOrder:p.sortOrder})));SKUS.sort((a,b)=>((a.sortOrder??999999)-(b.sortOrder??999999))||String(a.name||'').localeCompare(String(b.name||'')));}
     if(lm.length) MERCHANTS.push(...lm.map(m=>({id:m.id,name:m.name,area:m.area||''})));
   }catch(e){}
 })();
@@ -666,6 +666,9 @@ let agentTrays = {}; // populated by Firestore trays listener
 let activeOrder=null, curRepType='replace';
 let holdTimer=null;
 const UPI_QR_FILES=['./assets/upi-qr.png','./assets/qr-code.jpg','./assets/payment-qr.png','./assets/qr.png','./assets/qrcode.png'];
+function sortSkus(){
+  SKUS.sort((a,b)=>((a.sortOrder??999999)-(b.sortOrder??999999))||String(a.name||'').localeCompare(String(b.name||'')));
+}
 
 const NO_NAV=['s-sku','s-review','s-detail','s-upi-pay'];
 
@@ -685,7 +688,8 @@ function init() {
   // ── Real-time Firestore listeners ──
   db.collection('products').onSnapshot(snap=>{
     const prods=snap.docs.map(d=>d.data());
-    SKUS.splice(0,SKUS.length,...prods.map(p=>({id:p.id,name:p.name,price:p.sale,retail:p.retail||p.sale,stock:p.stock||0,code:p.code||''})));
+    SKUS.splice(0,SKUS.length,...prods.map(p=>({id:p.id,name:p.name,price:p.sale,retail:p.retail||p.sale,stock:p.stock||0,code:p.code||'',sortOrder:p.sortOrder})));
+    sortSkus();
     SKUS.forEach(s=>{ if(!(s.id in stockMap)) stockMap[s.id]=s.stock; });
     renderStock();
   });
