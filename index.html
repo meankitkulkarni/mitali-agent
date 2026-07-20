@@ -4,6 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
 <title>ModernBread Agent</title>
+<link rel="icon" type="image/png" href="./assets/mitali-logo.png"/>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
 <script src="https://cdn.tailwindcss.com"></script>
@@ -628,7 +629,7 @@ function init() {
   });
   db.collection('merchants').onSnapshot(snap=>{
     const merchs=snap.docs.map(d=>d.data());
-    MERCHANTS.splice(0,MERCHANTS.length,...merchs.map(m=>({id:m.id,name:m.name,area:m.area||''})));
+    MERCHANTS.splice(0,MERCHANTS.length,...merchs.map(m=>({id:m.id,name:m.name,area:m.area||'',phone:m.phone||m.whatsapp||''})));
     renderMerchants();
   });
   db.collection('orders').onSnapshot(snap=>{
@@ -1183,65 +1184,58 @@ if(typeof Notification!=='undefined'&&Notification.permission==='default'){
 // ════════════════════════════════════
 // PDF
 // ════════════════════════════════════
-function downloadPDF(o){
-  if(!o) return;
-  const{jsPDF}=window.jspdf;
-  const doc=new jsPDF({unit:'mm',format:'a5'});
-  const W=doc.internal.pageSize.getWidth();
-  doc.setFillColor(20,20,20);doc.rect(0,0,W,26,'F');
-  doc.setTextColor(255,255,255);
-  doc.setFont('helvetica','bold');doc.setFontSize(15);doc.text('ModernBread',12,11);
-  doc.setFont('helvetica','normal');doc.setFontSize(8);
-  doc.text('Distribution Invoice',12,18);
-  doc.text(o.id,W-12,11,{align:'right'});
-  doc.text(new Date(o.time).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}),W-12,18,{align:'right'});
-  doc.setTextColor(30,30,30);
-  doc.setFont('helvetica','bold');doc.setFontSize(10);doc.text('Bill To',12,34);
-  doc.setFont('helvetica','normal');doc.setFontSize(10);doc.text(o.merchantName,12,40);
-  const pm={cash:'Cash (Collected)',upi:'UPI / Online (Paid)',credit:'Credit (Collect Later)'};
-  doc.setFont('helvetica','bold');doc.text('Payment',W-55,34);
-  doc.setFont('helvetica','normal');doc.text(pm[o.payment]||o.payment,W-55,40);
-  const body=[];
-  o.items.forEach(it=>{
-    body.push([it.skuName,it.qty,`Rs.${it.price}`,`Rs.${it.amount}`]);
-    if(it.rep){
-      if(it.rep.type==='replace') body.push([`  Replacement: ${it.rep.qty} units swapped`,'','','']);
-      else body.push([`  Replacement deduct (${it.rep.qty} units)`,'','',`-Rs.${it.rep.deductAmt}`]);
-    }
-  });
-  doc.autoTable({
-    startY:50,
-    head:[['Product','Qty','Rate','Amount']],
-    body,
-    foot:[['','','Total',`Rs.${o.total}`]],
-    headStyles:{fillColor:[20,20,20],textColor:255,fontStyle:'bold',fontSize:9},
-    footStyles:{fillColor:[240,240,240],textColor:[20,20,20],fontStyle:'bold',fontSize:10},
-    bodyStyles:{fontSize:9,textColor:[30,30,30]},
-    alternateRowStyles:{fillColor:[250,250,250]},
-    columnStyles:{0:{cellWidth:'auto'},1:{halign:'center',cellWidth:14},2:{halign:'right',cellWidth:22},3:{halign:'right',cellWidth:26}},
-    margin:{left:12,right:12},styles:{font:'helvetica',cellPadding:3},
-    didParseCell(d){if(d.row.index>0&&String(d.cell.raw).startsWith('  Replacement')){d.cell.styles.textColor=[120,120,120];d.cell.styles.fontStyle='italic';}}
-  });
-  if(o.note){doc.setFontSize(8);doc.setTextColor(120,120,120);doc.text(`Note: ${o.note}`,12,doc.lastAutoTable.finalY+6);}
-  doc.setFontSize(7);doc.setTextColor(160,160,160);
-  doc.text('Thank you for your business.',W/2,doc.internal.pageSize.getHeight()-8,{align:'center'});
-  doc.save(`Invoice-${o.merchantName.replace(/\s+/g,'-')}-${o.id}.pdf`);
+let invoiceLogoDataUrl=null;
+async function getInvoiceLogo(){
+  if(invoiceLogoDataUrl)return invoiceLogoDataUrl;
+  const res=await fetch('./assets/mitali-logo.png');
+  const blob=await res.blob();
+  invoiceLogoDataUrl=await new Promise(resolve=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.readAsDataURL(blob);});
+  return invoiceLogoDataUrl;
+}
+function invoiceDateKey(o){const d=new Date(o.time);return `${String(d.getDate()).padStart(2,'0')}-${String(d.getMonth()+1).padStart(2,'0')}-${d.getFullYear()}`;}
+function invoiceFileName(o){return `invoice_${invoiceDateKey(o)}.pdf`;}
+function getOrderMerchant(o){return MERCHANTS.find(m=>m.id===o.merchantId)||{};}
+function normalizeWhatsAppNumber(raw){let n=String(raw||'').replace(/\D/g,'');if(n.length===10)n='91'+n;return n.length>=11?n:'';}
+function invoiceMessage(o){
+  const pm={cash:'Cash collected',upi:'UPI paid',credit:'Credit pending'};
+  const lines=o.items.map(it=>`- ${it.skuName}: ${it.qty} x Rs.${it.price} = Rs.${it.amount}`).join('\n');
+  return `Mitali Agency - Modern Bread Invoice\nDate: ${invoiceDateKey(o)}\nMerchant: ${o.merchantName}\nInvoice: ${o.id}\n\n${lines}\n\nTotal: Rs.${o.total}\nPayment: ${pm[o.payment]||o.payment}`;
+}
+async function buildInvoicePdf(o){
+  const{jsPDF}=window.jspdf;const doc=new jsPDF({unit:'mm',format:'a5'});const W=doc.internal.pageSize.getWidth(),H=doc.internal.pageSize.getHeight();
+  const merchant=getOrderMerchant(o),pm={cash:'Paid - Cash',upi:'Paid - UPI / Online',credit:'Pending - Credit'};
+  const logo=await getInvoiceLogo().catch(()=>null);
+  if(logo)doc.addImage(logo,'PNG',12,10,22,22);
+  doc.setTextColor(17,17,17);doc.setFont('helvetica','bold');doc.setFontSize(15);doc.text('Mitali Agency',logo?39:12,16);
+  doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(90,90,90);doc.text('Modern Bread Distributor | Roha-Raigad',logo?39:12,22);
+  doc.setFont('helvetica','bold');doc.setFontSize(11);doc.setTextColor(17,17,17);doc.text('INVOICE',W-12,15,{align:'right'});
+  doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(90,90,90);doc.text(o.id,W-12,21,{align:'right'});doc.text(invoiceDateKey(o),W-12,26,{align:'right'});
+  doc.setDrawColor(230,230,230);doc.line(12,36,W-12,36);
+  doc.setTextColor(17,17,17);doc.setFont('helvetica','bold');doc.setFontSize(9);doc.text('Bill To',12,45);doc.text('Payment',W-58,45);
+  doc.setFont('helvetica','normal');doc.setFontSize(9);doc.text(o.merchantName,12,51);if(merchant.area)doc.text(merchant.area,12,56);if(merchant.phone)doc.text(`WhatsApp: ${merchant.phone}`,12,61);
+  doc.text(pm[o.payment]||o.payment,W-58,51);
+  const body=[];o.items.forEach(it=>{body.push([it.skuName,it.qty,`Rs.${it.price}`,`Rs.${it.amount}`]);if(it.rep)body.push([it.rep.type==='replace'?`Replacement: ${it.rep.qty} units swapped`:`Replacement deduct (${it.rep.qty})`,'','',it.rep.type==='deduct'?`-Rs.${it.rep.deductAmt}`:'']);});
+  doc.autoTable({startY:70,head:[['Product','Qty','Rate','Amount']],body,foot:[['','','Grand Total',`Rs.${o.total}`]],headStyles:{fillColor:[23,23,23],textColor:255,fontStyle:'bold',fontSize:8},bodyStyles:{fontSize:8,textColor:[30,30,30]},footStyles:{fillColor:[245,245,245],textColor:[17,17,17],fontStyle:'bold',fontSize:9},alternateRowStyles:{fillColor:[252,252,252]},columnStyles:{1:{halign:'center',cellWidth:14},2:{halign:'right',cellWidth:23},3:{halign:'right',cellWidth:27}},margin:{left:12,right:12},styles:{font:'helvetica',cellPadding:3}});
+  if(o.note){doc.setFontSize(8);doc.setTextColor(90,90,90);doc.text(`Note: ${o.note}`,12,doc.lastAutoTable.finalY+8);}
+  doc.setDrawColor(230,230,230);doc.line(12,H-18,W-12,H-18);doc.setFontSize(7);doc.setTextColor(120,120,120);doc.text('Thank you for your business.',W/2,H-11,{align:'center'});
+  return doc;
+}
+async function downloadPDF(o){
+  if(!o)return;
+  (await buildInvoicePdf(o)).save(invoiceFileName(o));
   toast('Invoice downloaded');
 }
 
 // ════════════════════════════════════
 // WHATSAPP
 // ════════════════════════════════════
-function shareWA(o){
-  if(!o) return;
-  const lines=o.items.map(it=>{
-    let s=`- ${it.skuName}: ${it.qty} x Rs.${it.price} = Rs.${it.amount}`;
-    if(it.rep) s+=it.rep.type==='replace'?`\n  (Replacement: ${it.rep.qty} units swapped)`:`\n  (Replacement deduct: -Rs.${it.rep.deductAmt})`;
-    return s;
-  }).join('\n');
-  const pm={cash:'Cash (collected)',upi:'UPI (paid)',credit:'Credit (pending)'};
-  const msg=`*ModernBread Invoice*\nMerchant: *${o.merchantName}*\nDate: ${new Date(o.time).toLocaleDateString('en-IN')}\n\n${lines}\n\n*Total: Rs.${o.total}*\nPayment: ${pm[o.payment]||o.payment}\nRef: ${o.id}`;
-  window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`,'_blank');
+async function shareWA(o){
+  if(!o)return;
+  const merchant=getOrderMerchant(o),phone=normalizeWhatsAppNumber(merchant.phone||merchant.whatsapp);
+  const doc=await buildInvoicePdf(o),blob=doc.output('blob'),file=new File([blob],invoiceFileName(o),{type:'application/pdf'}),text=invoiceMessage(o);
+  if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],title:'Invoice',text}).catch(()=>{});return;}
+  doc.save(invoiceFileName(o));
+  window.open((phone?`https://wa.me/${phone}`:'https://wa.me/')+`?text=${encodeURIComponent(text+'\n\nPDF downloaded. Please attach '+invoiceFileName(o)+'.')}`,'_blank');
 }
 
 // ════════════════════════════════════
