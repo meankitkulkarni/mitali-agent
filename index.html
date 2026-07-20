@@ -1,0 +1,1259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+<title>ModernBread Agent</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="./supabase-config.js"></script>
+<script src="./supabase-firestore-adapter.js"></script>
+<script>
+// ── FIREBASE CONFIG — must match Admin.html exactly ──
+</script>
+<style>
+:root {
+  --bg:#fff; --bg2:#f7f7f7; --bg3:#eeeeee;
+  --text:#111; --text2:#666; --text3:#999;
+  --border:#e5e5e5; --border2:#d0d0d0;
+  --green:#1a7a3f; --green-bg:#f0faf4; --green-border:#c6e8d4;
+  --warn-bg:#fffbf0; --warn-text:#92600a;
+  --info-bg:#f0f6ff; --info-text:#1a4fa0;
+  --danger-bg:#fff2f0; --danger-text:#c0280a;
+  --r:12px; --rlg:16px; --rsm:8px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overflow:hidden}
+body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-size:14px;line-height:1.5}
+
+/* ── SCREENS ── */
+.screen{display:none;height:100vh;flex-direction:column;overflow:hidden}
+.screen.active{display:flex}
+
+/* ── TOPBAR ── */
+.topbar{background:var(--bg);border-bottom:1px solid var(--border);padding:10px 16px;display:flex;align-items:center;gap:10px;flex-shrink:0}
+.back-btn{width:34px;height:34px;border-radius:var(--rsm);background:var(--bg2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0}
+.back-btn svg{width:17px;height:17px}
+.topbar-info{flex:1;min-width:0}
+.topbar-title{font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.topbar-sub{font-size:11px;color:var(--text2);margin-top:1px}
+.topbar-right{text-align:right;flex-shrink:0}
+.topbar-right-label{font-size:10px;color:var(--text2);font-weight:500}
+.topbar-right-val{font-size:17px;font-weight:700}
+.topbar-action{font-size:13px;font-weight:600;color:#e8380d;background:none;border:none;cursor:pointer;flex-shrink:0;padding:4px 0}
+
+/* ── BOTTOM NAV ── */
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:var(--bg);border-top:1px solid var(--border);display:flex;z-index:100;padding-bottom:env(safe-area-inset-bottom)}
+.nav-btn{flex:1;padding:10px 4px;background:none;border:none;color:var(--text3);font-size:10px;font-weight:500;font-family:'Inter',sans-serif;display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;transition:color .15s}
+.nav-btn svg{width:20px;height:20px;stroke-width:1.75}
+.nav-btn.active{color:var(--text)}
+.nav-btn.active svg{stroke-width:2.25}
+
+/* ── SCROLL ── */
+.scroll-area{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:16px 16px calc(68px + env(safe-area-inset-bottom))}
+.scroll-area::-webkit-scrollbar{display:none}
+
+/* ── STATS ── */
+.stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:18px}
+.stat-box{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:13px 12px}
+.stat-val{font-size:18px;font-weight:700;letter-spacing:-.2px}
+.stat-label{font-size:11px;color:var(--text2);margin-top:2px;font-weight:500}
+
+/* ── SEC LABEL ── */
+.sec-label{font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px;margin-top:18px}
+.sec-label:first-child{margin-top:0}
+
+/* ── SEARCH ── */
+.search-wrap{position:relative;margin-bottom:10px}
+.search-icon{position:absolute;left:12px;top:50%;transform:translateY(-50%);pointer-events:none}
+.search-icon svg{width:14px;height:14px;stroke:var(--text3)}
+.search-input{width:100%;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:10px 12px 10px 34px;font-family:'Inter',sans-serif;font-size:14px;color:var(--text);outline:none}
+.search-input::placeholder{color:var(--text3)}
+.search-input:focus{border-color:var(--border2)}
+
+/* ── MERCHANT ITEM ── */
+.merchant-item{background:var(--bg);border:1px solid var(--border);border-radius:var(--r);padding:14px 16px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;margin-bottom:8px;transition:background .1s}
+.merchant-item:active{background:var(--bg2)}
+.m-name{font-size:14px;font-weight:600}
+.badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600}
+.badge-new{background:var(--text);color:#fff}
+.badge-done{background:var(--green-bg);color:var(--green);border:1px solid var(--green-border)}
+
+/* ── PROGRESS ── */
+.prog-wrap{padding:10px 16px 0;flex-shrink:0}
+.prog-track{height:3px;background:var(--border);border-radius:2px;overflow:hidden}
+.prog-fill{height:100%;background:var(--text);border-radius:2px;transition:width .3s ease}
+
+/* ── SKU SCROLL ── */
+.sku-scroll{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px 16px 8px}
+.sku-scroll::-webkit-scrollbar{display:none}
+
+/* ── SKU HEADER ── */
+.sku-header{background:var(--bg2);border:1px solid var(--border);border-radius:var(--rlg);padding:18px;margin-bottom:10px}
+.sku-micro{font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px}
+.sku-name{font-size:22px;font-weight:700;line-height:1.2}
+.sku-meta{display:flex;gap:14px;margin-top:8px}
+.sku-price{font-size:14px;font-weight:600}
+.sku-stk{font-size:13px;color:var(--text2)}
+
+/* ── QTY SECTION ── */
+.qty-section{background:var(--bg);border:1px solid var(--border);border-radius:var(--rlg);padding:16px 18px;margin-bottom:10px}
+.field-label{font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:10px}
+.qty-row{display:flex;align-items:center;border:1px solid var(--border2);border-radius:var(--r);overflow:hidden}
+.qty-btn{width:52px;height:52px;background:var(--bg2);border:none;font-size:22px;color:var(--text);cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:background .1s;-webkit-user-select:none;user-select:none}
+.qty-btn:active{background:var(--bg3)}
+.qty-inp{flex:1;text-align:center;border:none;outline:none;font-family:'Inter',sans-serif;font-size:28px;font-weight:700;color:var(--text);background:var(--bg);height:52px;padding:0;min-width:0}
+.qty-inp::-webkit-inner-spin-button,.qty-inp::-webkit-outer-spin-button{-webkit-appearance:none}
+.qty-inp[type=number]{-moz-appearance:textfield}
+.subtotal-row{display:flex;justify-content:space-between;align-items:center;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)}
+.subtotal-label{font-size:13px;color:var(--text2)}
+.subtotal-val{font-size:17px;font-weight:700}
+
+/* ── REPLACEMENT ── */
+.rep-section{background:var(--bg);border:1px solid var(--border);border-radius:var(--rlg);padding:16px 18px;margin-bottom:10px}
+.rep-toggle-row{display:flex;align-items:center;justify-content:space-between;cursor:pointer}
+.rep-title{font-size:14px;font-weight:600}
+.rep-sub{font-size:12px;color:var(--text2);margin-top:2px}
+.toggle-wrap{position:relative;width:40px;height:22px;flex-shrink:0}
+.toggle-wrap input{position:absolute;opacity:0;width:100%;height:100%;cursor:pointer;margin:0;z-index:2}
+.toggle-track{position:absolute;inset:0;background:var(--border2);border-radius:11px;transition:background .2s}
+.toggle-wrap input:checked+.toggle-track{background:var(--text)}
+.toggle-thumb{position:absolute;top:3px;left:3px;width:16px;height:16px;background:#fff;border-radius:50%;transition:transform .2s;pointer-events:none;z-index:1}
+.toggle-wrap input:checked~.toggle-thumb{transform:translateX(18px)}
+.rep-body{margin-top:14px;padding-top:14px;border-top:1px solid var(--border)}
+/* Rep type — pill row */
+.rep-type-row{display:flex;gap:8px;margin-bottom:14px}
+.rep-pill{flex:1;padding:8px 6px;border:1.5px solid var(--border2);border-radius:20px;text-align:center;cursor:pointer;font-size:12px;font-weight:600;color:var(--text2);transition:all .15s;white-space:nowrap}
+.rep-pill.sel{border-color:var(--text);background:var(--text);color:#fff}
+/* Rep small qty */
+.rep-qty-row{display:flex;align-items:center;border:1px solid var(--border2);border-radius:var(--rsm);overflow:hidden;margin-bottom:10px}
+.rep-qty-btn{width:44px;height:44px;background:var(--bg2);border:none;font-size:20px;color:var(--text);cursor:pointer;display:flex;align-items:center;justify-content:center;-webkit-user-select:none;user-select:none}
+.rep-qty-btn:active{background:var(--bg3)}
+.rep-qty-inp{flex:1;text-align:center;border:none;outline:none;font-family:'Inter',sans-serif;font-size:20px;font-weight:700;color:var(--text);background:var(--bg);height:44px;padding:0;min-width:0}
+.rep-qty-inp::-webkit-inner-spin-button{-webkit-appearance:none}
+.rep-qty-inp[type=number]{-moz-appearance:textfield}
+.rep-impact{padding:10px 12px;border-radius:var(--rsm);font-size:12px;font-weight:500;line-height:1.5}
+.rep-impact.rt-replace{background:var(--info-bg);color:var(--info-text)}
+.rep-impact.rt-deduct{background:var(--danger-bg);color:var(--danger-text)}
+
+/* ── SKU FOOTER ── */
+.sku-footer{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:12px 16px calc(12px + env(safe-area-inset-bottom));background:var(--bg);border-top:1px solid var(--border);flex-shrink:0}
+.btn-nav{padding:15px;border-radius:var(--r);font-family:'Inter',sans-serif;font-size:14px;font-weight:600;cursor:pointer;text-align:center;border:none;transition:background .1s}
+.btn-ghost{background:var(--bg2);border:1px solid var(--border);color:var(--text)}
+.btn-ghost:active{background:var(--bg3)}
+.btn-solid{background:var(--text);color:#fff}
+.btn-solid:active{background:#333}
+.btn-nav:disabled{opacity:.3;pointer-events:none}
+
+/* ── REVIEW ── */
+.review-card{background:var(--bg);border:1px solid var(--border);border-radius:var(--rlg);overflow:hidden;margin-bottom:12px}
+.review-row{display:flex;justify-content:space-between;align-items:flex-start;padding:13px 16px;border-bottom:1px solid var(--border)}
+.review-row:last-child{border-bottom:none}
+.review-sku{font-size:14px;font-weight:500}
+.review-detail{font-size:12px;color:var(--text2);margin-top:2px}
+.tag{display:inline-block;padding:2px 7px;border-radius:4px;font-size:11px;font-weight:600;margin-top:5px}
+.tag-info{background:var(--info-bg);color:var(--info-text)}
+.tag-danger{background:var(--danger-bg);color:var(--danger-text)}
+.review-amt{font-size:15px;font-weight:700;flex-shrink:0;margin-left:12px}
+.total-row{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;background:var(--bg2)}
+.total-label{font-size:13px;color:var(--text2);font-weight:500}
+.total-val{font-size:20px;font-weight:700}
+
+/* ── PAYMENT OPTIONS ── */
+.pay-option{border:1.5px solid var(--border2);border-radius:var(--r);padding:13px 16px;cursor:pointer;margin-bottom:8px;display:flex;align-items:center;gap:12px;background:var(--bg);transition:all .15s}
+.pay-option.sel{border-color:var(--text);background:var(--bg2)}
+.pay-icon-box{width:34px;height:34px;border-radius:var(--rsm);background:var(--bg3);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.pay-icon-box svg{width:17px;height:17px}
+.pay-label{font-size:14px;font-weight:600}
+.pay-sub{font-size:12px;color:var(--text2);margin-top:1px}
+.pay-radio{width:20px;height:20px;border-radius:50%;border:2px solid var(--border2);margin-left:auto;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:all .15s}
+.pay-option.sel .pay-radio{border-color:var(--text);background:var(--text)}
+.pay-radio-dot{width:7px;height:7px;border-radius:50%;background:#fff}
+
+/* ── BUTTONS ── */
+.btn-primary{width:100%;padding:15px;border-radius:var(--r);background:var(--text);color:#fff;border:none;font-family:'Inter',sans-serif;font-size:14px;font-weight:600;cursor:pointer;margin-top:8px;transition:background .1s}
+.btn-primary:active{background:#333}
+.btn-secondary{width:100%;padding:14px;border-radius:var(--r);background:var(--bg);color:var(--text);border:1.5px solid var(--border2);font-family:'Inter',sans-serif;font-size:14px;font-weight:600;cursor:pointer;margin-top:8px;transition:background .1s}
+.btn-secondary:active{background:var(--bg2)}
+
+/* ── TEXTAREA ── */
+.note-input{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:var(--r);padding:12px 14px;font-family:'Inter',sans-serif;font-size:14px;color:var(--text);outline:none;resize:none;height:70px;margin-top:8px}
+.note-input::placeholder{color:var(--text3)}
+.note-input:focus{border-color:var(--border2)}
+
+/* ── ORDER CARDS ── */
+.order-card{background:var(--bg);border:1px solid var(--border);border-radius:var(--r);padding:14px 16px;margin-bottom:8px}
+.order-top{display:flex;justify-content:space-between;align-items:flex-start}
+.order-merchant{font-size:15px;font-weight:600}
+.order-amount{font-size:16px;font-weight:700}
+.order-meta{font-size:12px;color:var(--text2);margin-top:3px}
+.status-tag{display:inline-block;padding:3px 8px;border-radius:4px;font-size:11px;font-weight:600}
+.s-cash{background:var(--green-bg);color:var(--green)}
+.s-credit{background:var(--warn-bg);color:var(--warn-text)}
+.s-upi{background:var(--info-bg);color:var(--info-text)}
+/* Payment update row in order card */
+.pay-update-row{display:flex;gap:6px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)}
+.pay-chip{flex:1;padding:7px 4px;border-radius:20px;border:1.5px solid var(--border2);font-size:11px;font-weight:600;text-align:center;cursor:pointer;color:var(--text2);transition:all .15s;background:var(--bg)}
+.pay-chip.active-cash{border-color:var(--green);background:var(--green-bg);color:var(--green)}
+.pay-chip.active-upi{border-color:#1a4fa0;background:var(--info-bg);color:var(--info-text)}
+.pay-chip.active-credit{border-color:#92600a;background:var(--warn-bg);color:var(--warn-text)}
+
+/* ── STOCK ── */
+.stock-card{background:var(--bg);border:1px solid var(--border);border-radius:var(--r);padding:14px 16px;margin-bottom:8px}
+.stock-top{display:flex;justify-content:space-between;align-items:flex-start}
+.stock-name{font-size:14px;font-weight:600}
+.stock-price{font-size:12px;color:var(--text2);margin-top:2px}
+.stock-count{font-size:20px;font-weight:700;text-align:right}
+.stock-unit{font-size:11px;color:var(--text2);text-align:right;margin-top:1px}
+.stock-bar{height:3px;background:var(--border);border-radius:2px;overflow:hidden;margin-top:10px}
+.bar-ok{background:#1a7a3f}.txt-ok{color:#1a7a3f}
+.bar-warn{background:#d4a820}.txt-warn{color:#92600a}
+.bar-low{background:#c0280a}.txt-low{color:#c0280a}
+
+/* ── DETAIL ── */
+.detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
+.detail-box{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:12px 14px}
+.detail-lbl{font-size:11px;color:var(--text2);font-weight:500;margin-bottom:4px}
+.detail-val{font-size:15px;font-weight:700}
+
+/* ── EXPENSES ── */
+.expense-card{background:var(--bg);border:1px solid var(--border);border-radius:var(--r);padding:14px 16px;margin-bottom:8px}
+.expense-top{display:flex;justify-content:space-between;align-items:flex-start}
+.expense-desc{font-size:14px;font-weight:600}
+.expense-amount{font-size:15px;font-weight:700;color:var(--danger-text)}
+.expense-meta{font-size:12px;color:var(--text2);margin-top:3px}
+.exp-cat-tag{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;margin-top:6px;background:var(--bg2);color:var(--text2);border:1px solid var(--border)}
+
+/* Input fields */
+.form-field{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:var(--r);padding:12px 14px;font-family:'Inter',sans-serif;font-size:14px;color:var(--text);outline:none;margin-bottom:10px;appearance:none}
+.form-field::placeholder{color:var(--text3)}
+.form-field:focus{border-color:var(--border2)}
+select.form-field{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center;padding-right:34px}
+
+/* ── EMPTY ── */
+.empty-state{text-align:center;padding:56px 20px;color:var(--text2)}
+.empty-title{font-size:15px;font-weight:600;color:var(--text);margin-bottom:6px}
+.empty-desc{font-size:13px}
+
+/* ── TOAST ── */
+/* ── BOTTOM SHEET ── */
+.sheet-overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:800;opacity:0;pointer-events:none;transition:opacity .25s}
+.sheet-overlay.open{opacity:1;pointer-events:all}
+.bottom-sheet{position:fixed;left:0;right:0;bottom:0;z-index:801;background:var(--bg);border-radius:20px 20px 0 0;padding:0 0 env(safe-area-inset-bottom);transform:translateY(100%);transition:transform .3s cubic-bezier(.32,.72,0,1);max-height:90vh;display:flex;flex-direction:column}
+.bottom-sheet.open{transform:translateY(0)}
+.sheet-handle{width:36px;height:4px;background:var(--border2);border-radius:2px;margin:12px auto 0}
+.sheet-hdr{padding:14px 18px 12px;border-bottom:1px solid var(--border);flex-shrink:0}
+.sheet-title{font-size:16px;font-weight:700}
+.sheet-sub{font-size:12px;color:var(--text2);margin-top:2px}
+.sheet-scroll{overflow-y:auto;flex:1;padding:14px 16px}
+.sheet-foot{padding:12px 16px;border-top:1px solid var(--border);flex-shrink:0;display:flex;gap:10px}
+/* ── STOCK ENTRY ROWS ── */
+.se-row{display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--bg2);border-radius:var(--r);margin-bottom:8px}
+.se-info{flex:1;min-width:0}
+.se-pname{font-size:13px;font-weight:600}
+.se-pprice{font-size:11px;color:var(--text2);margin-top:2px}
+.se-qty-wrap{display:flex;align-items:center;gap:0;border:1.5px solid var(--border2);border-radius:10px;overflow:hidden;background:var(--bg)}
+.se-qty-btn{width:36px;height:36px;border:none;background:transparent;font-size:20px;font-weight:300;color:var(--text2);cursor:pointer;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent}
+.se-qty-btn:active{background:var(--bg2)}
+.se-qty-inp{width:48px;height:36px;border:none;text-align:center;font-size:14px;font-weight:700;font-family:'Inter',sans-serif;background:transparent;-moz-appearance:textfield}
+.se-qty-inp::-webkit-outer-spin-button,.se-qty-inp::-webkit-inner-spin-button{-webkit-appearance:none}
+.se-sub-val{font-size:12px;font-family:monospace;color:var(--text2);min-width:60px;text-align:right}
+/* ── BILL PREVIEW BAR ── */
+.bill-preview{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;background:#f0faf4;border:1px solid #c6e8d4;border-radius:var(--r);margin-top:4px}
+.bill-preview-lbl{font-size:12px;color:#1a7a3f;font-weight:500}
+.bill-preview-val{font-size:18px;font-weight:800;color:#1a7a3f;font-family:monospace}
+/* ── TRAY ROW ── */
+.tray-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+.tray-inp-wrap label{font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;display:block;margin-bottom:6px}
+.tray-inp{width:100%;padding:10px 12px;border:1.5px solid var(--border2);border-radius:var(--r);font-size:15px;font-weight:700;text-align:center;font-family:'Inter',sans-serif;background:var(--bg);-moz-appearance:textfield}
+.tray-inp::-webkit-outer-spin-button,.tray-inp::-webkit-inner-spin-button{-webkit-appearance:none}
+/* ── TODAY'S RECEIVED BADGE ── */
+.stock-received{margin-top:8px;padding:6px 10px;background:var(--info-bg);border-radius:var(--rsm);display:flex;justify-content:space-between;align-items:center}
+.stock-received-lbl{font-size:11px;color:var(--info-text);font-weight:500}
+.stock-received-val{font-size:12px;color:var(--info-text);font-weight:700;font-family:monospace}
+
+.toast{position:fixed;bottom:calc(68px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%) translateY(10px);background:var(--text);color:#fff;padding:10px 18px;border-radius:20px;font-size:13px;font-weight:500;z-index:9999;opacity:0;transition:all .25s;pointer-events:none;white-space:nowrap}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ── NOTIFICATION BANNER ── */
+.notif-banner{position:fixed;top:0;left:0;right:0;z-index:999;background:var(--warn-bg);border-bottom:1px solid #e8c97a;padding:12px 16px;display:flex;align-items:flex-start;gap:12px;transform:translateY(-100%);transition:transform .3s ease;font-size:13px}
+.notif-banner.show{transform:translateY(0)}
+.notif-close{margin-left:auto;background:none;border:none;font-size:18px;cursor:pointer;color:var(--text2);padding:0;flex-shrink:0;line-height:1}
+</style>
+</head>
+<body>
+
+<!-- NOTIFICATION BANNER -->
+<div class="notif-banner" id="notif-banner">
+  <div style="flex:1;">
+    <div style="font-weight:700;font-size:13px;margin-bottom:3px;">Pending Bills Reminder</div>
+    <div id="notif-text" style="color:var(--text2);font-size:12px;"></div>
+  </div>
+  <button class="notif-close" onclick="dismissNotif()">&#x2715;</button>
+</div>
+
+<!-- ═══ HOME ═══ -->
+<div id="s-home" class="screen active">
+  <div class="topbar">
+    <div class="topbar-info">
+      <div class="topbar-title">ModernBread</div>
+    </div>
+    <div class="topbar-right">
+      <div id="home-date" style="font-size:12px;color:var(--text2);font-weight:500;text-align:right;">—</div>
+    </div>
+  </div>
+  <div class="scroll-area">
+    <!-- Opening Balance banner (shown when admin has set it) -->
+    <div id="ob-banner" style="display:none;background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:10px 14px;margin-bottom:12px;align-items:center;justify-content:space-between">
+      <div>
+        <div style="font-size:10px;font-weight:600;color:#1e40af;text-transform:uppercase;letter-spacing:.07em;">Opening Balance</div>
+        <div style="font-size:20px;font-weight:700;color:#1e3a8a;font-family:'Inter',sans-serif" id="st-ob">Rs. 0</div>
+      </div>
+      <div style="font-size:11px;color:#3b82f6;text-align:right" id="st-ob-time">—</div>
+    </div>
+    <div class="stat-grid">
+      <div class="stat-box"><div class="stat-val" id="st-rev" style="color:#1a7a3f;">Rs. 0</div><div class="stat-label">Revenue</div></div>
+      <div class="stat-box"><div class="stat-val" id="st-merchants">0</div><div class="stat-label">Merchants Done</div></div>
+      <div class="stat-box"><div class="stat-val" id="st-coll">Rs. 0</div><div class="stat-label">Cash + UPI</div></div>
+      <div class="stat-box"><div class="stat-val" id="st-pend">Rs. 0</div><div class="stat-label">Credit Pending</div></div>
+    </div>
+    <div class="sec-label" style="margin-top:0;">Route</div>
+    <div class="search-wrap">
+      <span class="search-icon"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg></span>
+      <input class="search-input" type="text" id="merchant-search" placeholder="Search merchant..." oninput="filterMerchants()"/>
+    </div>
+    <div id="merchant-list"></div>
+  </div>
+</div>
+
+<!-- ═══ SKU ENTRY ═══ -->
+<div id="s-sku" class="screen">
+  <div class="topbar">
+    <div class="back-btn" onclick="goHome()"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 12H5M12 5l-7 7 7 7"/></svg></div>
+    <div class="topbar-info">
+      <div class="topbar-title" id="sku-mname">—</div>
+      <div class="topbar-sub" id="sku-step">—</div>
+    </div>
+    <button class="topbar-action" onclick="goToReview()">Review</button>
+  </div>
+  <div class="prog-wrap"><div class="prog-track"><div class="prog-fill" id="sku-prog" style="width:0%"></div></div></div>
+  <div class="sku-scroll" id="sku-scroll">
+    <div class="sku-header" style="margin-top:14px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+        <div class="sku-micro">Product</div>
+        <span id="sku-code-badge" style="font-family:'Inter',monospace;font-size:11px;font-weight:700;background:var(--bg3);border:1px solid var(--border2);border-radius:6px;padding:2px 8px;color:var(--text2);display:none;"></span>
+      </div>
+      <div class="sku-name" id="sku-name">—</div>
+      <div class="sku-meta">
+        <span class="sku-price" id="sku-price">—</span>
+        <span class="sku-stk" id="sku-stock">—</span>
+      </div>
+    </div>
+    <!-- QTY -->
+    <div class="qty-section">
+      <div class="field-label">Quantity Ordered</div>
+      <div class="qty-row">
+        <button class="qty-btn" onpointerdown="startHold(-1,'qty-inp')" onpointerup="stopHold()" onpointerleave="stopHold()" onclick="adjQty(-1)">−</button>
+        <input class="qty-inp" type="number" id="qty-inp" value="0" min="0" oninput="onQty()"/>
+        <button class="qty-btn" onpointerdown="startHold(1,'qty-inp')" onpointerup="stopHold()" onpointerleave="stopHold()" onclick="adjQty(1)">+</button>
+      </div>
+      <div class="subtotal-row">
+        <span class="subtotal-label">Subtotal</span>
+        <span class="subtotal-val" id="sku-subtotal">Rs. 0</span>
+      </div>
+    </div>
+    <!-- REPLACEMENT -->
+    <div class="rep-section">
+      <div class="rep-toggle-row" onclick="toggleRep()">
+        <div>
+          <div class="rep-title">Replacement</div>
+          <div class="rep-sub">Log expired product returns</div>
+        </div>
+        <label class="toggle-wrap" onclick="event.stopPropagation()">
+          <input type="checkbox" id="rep-chk" onchange="onRepToggle()"/>
+          <span class="toggle-track"></span>
+          <span class="toggle-thumb"></span>
+        </label>
+      </div>
+      <div class="rep-body" id="rep-body" style="display:none;">
+        <div class="field-label" style="margin-bottom:8px;">Type</div>
+        <div class="rep-type-row">
+          <div class="rep-pill sel" id="rpill-replace" onclick="setRepType('replace')">Replace Stock</div>
+          <div class="rep-pill" id="rpill-deduct" onclick="setRepType('deduct')">Deduct from Bill</div>
+        </div>
+        <div class="field-label">Expired Units Returned</div>
+        <div class="rep-qty-row">
+          <button class="rep-qty-btn" onpointerdown="startHold(-1,'rep-qty')" onpointerup="stopHold()" onpointerleave="stopHold()" onclick="adjRepQty(-1)">−</button>
+          <input class="rep-qty-inp" type="number" id="rep-qty" value="0" min="0" oninput="onRepQty()"/>
+          <button class="rep-qty-btn" onpointerdown="startHold(1,'rep-qty')" onpointerup="stopHold()" onpointerleave="stopHold()" onclick="adjRepQty(1)">+</button>
+        </div>
+        <div class="rep-impact" id="rep-impact"></div>
+      </div>
+    </div>
+  </div>
+  <div class="sku-footer">
+    <button class="btn-nav btn-ghost" id="btn-prev" onclick="prevSKU()">Back</button>
+    <button class="btn-nav btn-solid" id="btn-next" onclick="nextSKU()">Next</button>
+  </div>
+</div>
+
+<!-- ═══ REVIEW ═══ -->
+<div id="s-review" class="screen">
+  <div class="topbar">
+    <div class="back-btn" onclick="showS('s-sku')"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 12H5M12 5l-7 7 7 7"/></svg></div>
+    <div class="topbar-info">
+      <div class="topbar-title">Review Order</div>
+      <div class="topbar-sub" id="review-mname">—</div>
+    </div>
+  </div>
+  <div class="scroll-area">
+    <div class="sec-label" style="margin-top:0;">Order Summary</div>
+    <div class="review-card">
+      <div id="review-items"></div>
+      <div class="total-row"><span class="total-label">Grand Total</span><span class="total-val" id="review-total">Rs. 0</span></div>
+    </div>
+    <div class="sec-label">Payment Mode</div>
+    <div onclick="selPay('cash')" class="pay-option sel" id="pay-cash">
+      <div class="pay-icon-box"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2"/></svg></div>
+      <div><div class="pay-label">Cash</div><div class="pay-sub">Collected on delivery</div></div>
+      <div class="pay-radio" id="r-cash"><div class="pay-radio-dot"></div></div>
+    </div>
+    <div onclick="selPay('upi')" class="pay-option" id="pay-upi">
+      <div class="pay-icon-box"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/></svg></div>
+      <div><div class="pay-label">UPI / Online</div><div class="pay-sub">GPay, PhonePe, etc.</div></div>
+      <div class="pay-radio" id="r-upi"><div class="pay-radio-dot"></div></div>
+    </div>
+    <div onclick="selPay('credit')" class="pay-option" id="pay-credit">
+      <div class="pay-icon-box"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
+      <div><div class="pay-label">Credit</div><div class="pay-sub">Collect later</div></div>
+      <div class="pay-radio" id="r-credit"><div class="pay-radio-dot"></div></div>
+    </div>
+    <div class="sec-label">Note</div>
+    <textarea class="note-input" id="order-note" placeholder="Optional note..."></textarea>
+    <button class="btn-primary" onclick="saveOrder()">Save Order & Generate Invoice</button>
+    <button class="btn-secondary" onclick="showS('s-sku')">Edit Order</button>
+    <div style="height:8px;"></div>
+  </div>
+</div>
+
+<!-- ═══ ORDERS ═══ -->
+<div id="s-orders" class="screen">
+  <div class="topbar">
+    <div class="topbar-info">
+      <div class="topbar-title">Orders</div>
+      <div class="topbar-sub" id="orders-sub">Today</div>
+    </div>
+    <div class="topbar-right">
+      <div class="topbar-right-label">Total</div>
+      <div id="orders-total" class="topbar-right-val">Rs. 0</div>
+    </div>
+  </div>
+  <div class="scroll-area"><div id="orders-list"></div></div>
+</div>
+
+<!-- ═══ ORDER DETAIL ═══ -->
+<div id="s-detail" class="screen">
+  <div class="topbar">
+    <div class="back-btn" onclick="showS('s-orders')"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 12H5M12 5l-7 7 7 7"/></svg></div>
+    <div class="topbar-info">
+      <div class="topbar-title" id="det-merchant">—</div>
+      <div class="topbar-sub" id="det-time">—</div>
+    </div>
+  </div>
+  <div class="scroll-area">
+    <div class="review-card" style="margin-bottom:12px;">
+      <div id="det-items"></div>
+      <div class="total-row"><span class="total-label">Total</span><span class="total-val" id="det-total">Rs. 0</span></div>
+    </div>
+    <div class="detail-grid">
+      <div class="detail-box"><div class="detail-lbl">Payment</div><div class="detail-val" id="det-pay">—</div></div>
+      <div class="detail-box"><div class="detail-lbl">Status</div><div class="detail-val" id="det-status">—</div></div>
+    </div>
+    <button class="btn-primary" onclick="downloadPDF(activeOrder)">Download Invoice PDF</button>
+    <button class="btn-secondary" onclick="shareWA(activeOrder)">Share on WhatsApp</button>
+    <div style="height:8px;"></div>
+  </div>
+</div>
+
+<!-- ═══ STOCK ═══ -->
+<div id="s-stock" class="screen">
+  <div class="topbar">
+    <div class="topbar-info"><div class="topbar-title">Stock</div><div class="topbar-sub" id="stock-sub">Today's inventory</div></div>
+    <button onclick="openStockEntry()" style="margin-left:auto;background:var(--text);color:#fff;border:none;border-radius:10px;padding:8px 14px;font-size:13px;font-weight:600;font-family:'Inter',sans-serif;cursor:pointer;white-space:nowrap">+ Add Stock</button>
+  </div>
+  <div class="scroll-area">
+    <div id="stock-received-bar" style="display:none;margin:12px 16px 0;padding:10px 14px;background:var(--info-bg);border:1px solid #bfdbfe;border-radius:var(--r)">
+      <div style="font-size:11px;font-weight:600;color:var(--info-text);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Received Today</div>
+      <div id="stock-received-items" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;padding-top:8px;border-top:1px solid #bfdbfe">
+        <span style="font-size:11px;color:var(--info-text)">Bill Value</span>
+        <span id="stock-received-bill" style="font-size:14px;font-weight:700;color:var(--info-text);font-family:monospace">Rs. 0</span>
+      </div>
+    </div>
+    <div id="stock-list" style="padding:12px 16px 0"></div>
+  </div>
+</div>
+
+<!-- ═══ EXPENSES ═══ -->
+<div id="s-expenses" class="screen">
+  <div class="topbar">
+    <div class="topbar-info">
+      <div class="topbar-title">Expenses</div>
+      <div class="topbar-sub" id="exp-sub">Today</div>
+    </div>
+    <div class="topbar-right">
+      <div class="topbar-right-label">Total</div>
+      <div id="exp-total-hdr" class="topbar-right-val" style="color:var(--danger-text);">Rs. 0</div>
+    </div>
+  </div>
+  <div class="scroll-area">
+    <!-- Add expense form -->
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--rlg);padding:16px;margin-bottom:16px;">
+      <div class="sec-label" style="margin-top:0;margin-bottom:12px;">Add Expense</div>
+      <input class="form-field" type="text" id="exp-desc" placeholder="Description (e.g. Vehicle fuel)"/>
+      <input class="form-field" type="number" id="exp-amt" placeholder="Amount (Rs.)" min="0"/>
+      <button class="btn-primary" style="margin-top:4px;" onclick="addExpense()">Add Expense</button>
+    </div>
+    <div class="sec-label" style="margin-top:0;">Today's Expenses</div>
+    <div id="expenses-list"></div>
+  </div>
+</div>
+
+<!-- ═══ BOTTOM NAV (4 tabs) ═══ -->
+<nav class="bottom-nav" id="bottom-nav">
+  <button class="nav-btn active" id="nav-home" onclick="navTo('home')">
+    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M3 9.5L12 3l9 6.5V20a1 1 0 01-1 1H4a1 1 0 01-1-1V9.5z"/><path d="M9 21V12h6v9"/></svg>
+    Home
+  </button>
+  <button class="nav-btn" id="nav-orders" onclick="navTo('orders')">
+    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+    Orders
+  </button>
+  <button class="nav-btn" id="nav-stock" onclick="navTo('stock')">
+    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/></svg>
+    Stock
+  </button>
+  <button class="nav-btn" id="nav-expenses" onclick="navTo('expenses')">
+    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 1 0 0 7h5a3.5 3.5 0 1 1 0 7H6"/></svg>
+    Expenses
+  </button>
+</nav>
+
+<!-- ═══ STOCK ENTRY BOTTOM SHEET ═══ -->
+<div class="sheet-overlay" id="stock-sheet-overlay" onclick="closeStockEntry()"></div>
+<div class="bottom-sheet" id="stock-sheet">
+  <div class="sheet-handle"></div>
+  <div class="sheet-hdr">
+    <div class="sheet-title">Add Fresh Stock</div>
+    <div class="sheet-sub" id="stock-sheet-date"></div>
+  </div>
+  <div class="sheet-scroll">
+    <div id="stock-sheet-products"></div>
+    <div class="bill-preview">
+      <span class="bill-preview-lbl">Calculated Bill</span>
+      <span class="bill-preview-val" id="stock-sheet-bill">Rs. 0</span>
+    </div>
+    <div class="tray-row">
+      <div class="tray-inp-wrap">
+        <label>Full Trays In</label>
+        <input class="tray-inp" type="number" id="sheet-tray-full" placeholder="0" min="0"/>
+      </div>
+      <div class="tray-inp-wrap">
+        <label>Empty Trays Out</label>
+        <input class="tray-inp" type="number" id="sheet-tray-empty" placeholder="0" min="0"/>
+      </div>
+    </div>
+  </div>
+  <div class="sheet-foot">
+    <button onclick="closeStockEntry()" style="flex:1;padding:13px;border:1.5px solid var(--border2);border-radius:var(--r);background:var(--bg);font-size:14px;font-weight:600;font-family:'Inter',sans-serif;cursor:pointer">Cancel</button>
+    <button onclick="saveAgentStock()" style="flex:2;padding:13px;border:none;border-radius:var(--r);background:var(--text);color:#fff;font-size:14px;font-weight:600;font-family:'Inter',sans-serif;cursor:pointer">Save Stock Entry</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ════════════════════════════════════
+// DATA — loaded from Firestore (shared with Admin)
+// ════════════════════════════════════
+let SKUS = [];
+let MERCHANTS = [];
+// Seed from localStorage while Firestore hydrates
+(()=>{
+  try{
+    const lp=JSON.parse(localStorage.getItem('mb_admin_skus')||'[]');
+    const lm=JSON.parse(localStorage.getItem('mb_admin_merchants')||'[]');
+    if(lp.length) SKUS.push(...lp.map(p=>({id:p.id,name:p.name,price:p.sale,retail:p.retail||p.sale,stock:p.stock||0})));
+    if(lm.length) MERCHANTS.push(...lm.map(m=>({id:m.id,name:m.name,area:m.area||''})));
+  }catch(e){}
+})();
+
+// ════════════════════════════════════
+// STATE
+// ════════════════════════════════════
+let curMerchant=null, curSKUIdx=0, curOrder={}, selPayMode='cash';
+let orders   = [];   // populated by Firestore onSnapshot
+let expenses = [];   // populated by Firestore onSnapshot
+let stockMap = {};   // populated after products snap
+let agentSE  = {};   // populated by Firestore stockEntries listener
+let agentTrays = {}; // populated by Firestore trays listener
+let activeOrder=null, curRepType='replace';
+let holdTimer=null;
+
+const NO_NAV=['s-sku','s-review','s-detail'];
+
+// ════════════════════════════════════
+// BOOT
+// ════════════════════════════════════
+function init() {
+  const now = new Date();
+  const todayKey=now.toISOString().slice(0,10);
+  document.getElementById('home-date').textContent =
+    now.toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short'});
+  document.getElementById('orders-sub').textContent =
+    now.toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'});
+  document.getElementById('exp-sub').textContent =
+    now.toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'});
+
+  // ── Real-time Firestore listeners ──
+  db.collection('products').onSnapshot(snap=>{
+    const prods=snap.docs.map(d=>d.data());
+    SKUS.splice(0,SKUS.length,...prods.map(p=>({id:p.id,name:p.name,price:p.sale,retail:p.retail||p.sale,stock:p.stock||0,code:p.code||''})));
+    SKUS.forEach(s=>{ if(!(s.id in stockMap)) stockMap[s.id]=s.stock; });
+    renderStock();
+  });
+  db.collection('merchants').onSnapshot(snap=>{
+    const merchs=snap.docs.map(d=>d.data());
+    MERCHANTS.splice(0,MERCHANTS.length,...merchs.map(m=>({id:m.id,name:m.name,area:m.area||''})));
+    renderMerchants();
+  });
+  db.collection('orders').onSnapshot(snap=>{
+    orders=snap.docs.map(d=>({...d.data(),id:d.id}));
+    renderMerchants(); renderOrders(); updateStats();
+  });
+  db.collection('expenses').onSnapshot(snap=>{
+    expenses=snap.docs.map(d=>({...d.data(),id:d.id}));
+    renderExpenses(); updateStats();
+  });
+  // Stock entries and trays — agent can see + add
+  db.collection('stockEntries').onSnapshot(snap=>{
+    agentSE={};snap.docs.forEach(d=>{agentSE[d.id]=d.data();});
+    renderStock();
+  });
+  db.collection('trays').onSnapshot(snap=>{
+    agentTrays={};snap.docs.forEach(d=>{agentTrays[d.id]=d.data();});
+  });
+  // Opening balance — show to agent
+  db.collection('openingBal').onSnapshot(snap=>{
+    const obDoc=snap.docs.find(d=>d.id===todayKey);
+    const banner=document.getElementById('ob-banner');
+    if(obDoc){
+      const ob=obDoc.data();
+      document.getElementById('st-ob').textContent=`Rs. ${(ob.amount||0).toLocaleString('en-IN')}`;
+      document.getElementById('st-ob-time').textContent=`Set at ${new Date(ob.time).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}${ob.note?'\n'+ob.note:''}`;
+      banner.style.display='flex';
+    } else {
+      banner.style.display='none';
+    }
+  });
+
+  // Sync stockMap with current SKUS
+  SKUS.forEach(s=>{ if(!(s.id in stockMap)) stockMap[s.id]=s.stock; });
+
+  renderMerchants(); renderOrders(); renderStock(); renderExpenses(); updateStats();
+  scheduleNotifications();
+}
+
+// ════════════════════════════════════
+// SCREENS
+// ════════════════════════════════════
+function showS(id) {
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  document.getElementById('bottom-nav').style.display = NO_NAV.includes(id)?'none':'flex';
+}
+function navTo(tab) {
+  const map={home:'s-home',orders:'s-orders',stock:'s-stock',expenses:'s-expenses'};
+  showS(map[tab]);
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('nav-'+tab).classList.add('active');
+}
+function goHome() {
+  showS('s-home');
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('nav-home').classList.add('active');
+}
+
+// ════════════════════════════════════
+// HOLD-TO-REPEAT for qty buttons
+// ════════════════════════════════════
+function startHold(delta, inputId) {
+  stopHold();
+  holdTimer = setInterval(()=>{
+    const el = document.getElementById(inputId);
+    const v = Math.max(0, parseInt(el.value||0) + delta);
+    el.value = v;
+    if (inputId==='qty-inp') onQty(); else onRepQty();
+  }, 120);
+}
+function stopHold() { if(holdTimer){clearInterval(holdTimer);holdTimer=null;} }
+
+// ════════════════════════════════════
+// MERCHANTS
+// ════════════════════════════════════
+function renderMerchants(q='') {
+  const list = document.getElementById('merchant-list');
+  if(!MERCHANTS.length){
+    list.innerHTML=`<div class="empty-state"><div class="empty-title">No merchants yet</div><div class="empty-desc">Ask admin to add merchants first</div></div>`;
+    return;
+  }
+  const todayOrds = orders.filter(isToday);
+  const doneIds = new Set(todayOrds.map(o=>o.merchantId));
+  const ql = q.toLowerCase();
+  const filtered = MERCHANTS.filter(m=>m.name.toLowerCase().includes(ql)||(m.area||'').toLowerCase().includes(ql));
+  if (!filtered.length) {
+    list.innerHTML=`<div class="empty-state"><div class="empty-title">No merchants found</div></div>`;
+    return;
+  }
+  list.innerHTML = filtered.map(m=>{
+    const done = doneIds.has(m.id);
+    const ord = todayOrds.find(o=>o.merchantId===m.id);
+    return `<div class="merchant-item" onclick="startOrder('${m.id}')">
+      <div><div class="m-name">${m.name}</div>${m.area?`<div style="font-size:11px;color:var(--text2);margin-top:2px">${m.area}</div>`:''}</div>
+      ${done
+        ? `<span class="badge badge-done">Rs. ${ord.total}</span>`
+        : `<span class="badge badge-new">Order</span>`}
+    </div>`;
+  }).join('');
+}
+function filterMerchants(){renderMerchants(document.getElementById('merchant-search').value);}
+
+// ════════════════════════════════════
+// ORDER FLOW
+// ════════════════════════════════════
+function startOrder(merchantId) {
+  if(!SKUS.length){toast('No products configured. Contact admin.');return;}
+  curMerchant=MERCHANTS.find(m=>m.id===merchantId);
+  curSKUIdx=0; curOrder={}; selPayMode='cash';
+  showS('s-sku'); renderSKU();
+}
+
+function renderSKU() {
+  const sku=SKUS[curSKUIdx], n=SKUS.length;
+  document.getElementById('sku-mname').textContent=curMerchant.name;
+  document.getElementById('sku-step').textContent=`SKU ${curSKUIdx+1} of ${n}`;
+  document.getElementById('sku-name').textContent=sku.name;
+  document.getElementById('sku-price').textContent=`Rs. ${sku.price} / piece`;
+  // Show DSR code badge if available
+  // Use code from in-memory SKUS (synced from Firestore/admin)
+  const fullSku=SKUS.find(s=>s.id===sku.id);
+  const codeBadge=document.getElementById('sku-code-badge');
+  if(fullSku&&fullSku.code){codeBadge.textContent=fullSku.code;codeBadge.style.display='inline-block';}
+  else codeBadge.style.display='none';
+  const avail=stockMap[sku.id]??sku.stock;
+  document.getElementById('sku-stock').textContent=`${avail} pcs in stock`;
+  document.getElementById('sku-prog').style.width=`${((curSKUIdx+1)/n)*100}%`;
+
+  const saved=curOrder[sku.id]||{};
+  document.getElementById('qty-inp').value=saved.qty||0;
+  const rep=saved.rep||{};
+  const repActive=!!rep.active;
+  document.getElementById('rep-chk').checked=repActive;
+  document.getElementById('rep-body').style.display=repActive?'block':'none';
+  curRepType=rep.type||'replace';
+  syncRepPills();
+  document.getElementById('rep-qty').value=rep.qty||0;
+  calcSubtotal(); calcRepImpact();
+  document.getElementById('btn-prev').disabled=curSKUIdx===0;
+  document.getElementById('btn-next').textContent=curSKUIdx===n-1?'Review':'Next';
+  document.getElementById('sku-scroll').scrollTop=0;
+}
+
+// ── QTY ──
+function adjQty(d){
+  const el=document.getElementById('qty-inp');
+  el.value=Math.max(0,parseInt(el.value||0)+d); onQty();
+}
+function onQty(){saveSKU();calcSubtotal();calcRepImpact();}
+
+function calcSubtotal(){
+  const sku=SKUS[curSKUIdx];
+  let amt=(parseInt(document.getElementById('qty-inp').value||0))*sku.price;
+  if(document.getElementById('rep-chk').checked && curRepType==='deduct'){
+    amt=Math.max(0,amt-(parseInt(document.getElementById('rep-qty').value||0))*sku.price);
+  }
+  document.getElementById('sku-subtotal').textContent=`Rs. ${amt}`;
+}
+
+// ── REPLACEMENT ──
+function toggleRep(){
+  const chk=document.getElementById('rep-chk');
+  chk.checked=!chk.checked; onRepToggle();
+}
+function onRepToggle(){
+  const on=document.getElementById('rep-chk').checked;
+  document.getElementById('rep-body').style.display=on?'block':'none';
+  if(!on) document.getElementById('rep-qty').value=0;
+  // Auto-select deduct if stock not available for this SKU
+  if(on){
+    const sku=SKUS[curSKUIdx];
+    const avail=stockMap[sku.id]??sku.stock;
+    if(avail<=0){ curRepType='deduct'; syncRepPills(); }
+  }
+  saveSKU(); calcSubtotal(); calcRepImpact();
+}
+function setRepType(t){
+  curRepType=t; syncRepPills();
+  saveSKU(); calcSubtotal(); calcRepImpact();
+}
+function syncRepPills(){
+  document.getElementById('rpill-replace').classList.toggle('sel',curRepType==='replace');
+  document.getElementById('rpill-deduct').classList.toggle('sel',curRepType==='deduct');
+}
+function adjRepQty(d){
+  const el=document.getElementById('rep-qty');
+  el.value=Math.max(0,parseInt(el.value||0)+d); onRepQty();
+}
+function onRepQty(){saveSKU();calcSubtotal();calcRepImpact();}
+function calcRepImpact(){
+  const sku=SKUS[curSKUIdx];
+  const active=document.getElementById('rep-chk').checked;
+  const rq=parseInt(document.getElementById('rep-qty').value||0);
+  const el=document.getElementById('rep-impact');
+  if(!active||rq===0){el.textContent='';el.className='rep-impact';return;}
+  if(curRepType==='replace'){
+    el.className='rep-impact rt-replace';
+    el.textContent=`${rq} expired unit(s) collected. ${rq} fresh unit(s) given back. No bill impact.`;
+  } else {
+    el.className='rep-impact rt-deduct';
+    el.textContent=`${rq} expired unit(s) not replaced. Bill reduced by Rs. ${rq*sku.price}.`;
+  }
+}
+
+function saveSKU(){
+  const sku=SKUS[curSKUIdx];
+  const qty=parseInt(document.getElementById('qty-inp').value||0);
+  const repActive=document.getElementById('rep-chk').checked;
+  const repQty=parseInt(document.getElementById('rep-qty').value||0);
+  if(qty>0||(repActive&&repQty>0)){
+    curOrder[sku.id]={qty,rep:{active:repActive,type:curRepType,qty:repQty}};
+  } else { delete curOrder[sku.id]; }
+}
+
+function nextSKU(){saveSKU(); if(curSKUIdx<SKUS.length-1){curSKUIdx++;renderSKU();}else goToReview();}
+function prevSKU(){saveSKU(); if(curSKUIdx>0){curSKUIdx--;renderSKU();}}
+
+// ── REVIEW ──
+function goToReview(){
+  saveSKU(); showS('s-review');
+  document.getElementById('review-mname').textContent=curMerchant.name;
+  buildReview(); selPay(selPayMode);
+}
+function buildReview(){
+  const entries=Object.entries(curOrder);
+  if(!entries.length){
+    document.getElementById('review-items').innerHTML=`<div style="padding:16px;font-size:14px;color:var(--text2);">No items added yet.</div>`;
+    document.getElementById('review-total').textContent='Rs. 0'; return;
+  }
+  let grand=0,html='';
+  for(const[skuId,data] of entries){
+    const sku=SKUS.find(s=>s.id===skuId);
+    let line=(data.qty||0)*sku.price; let tag='';
+    if(data.rep&&data.rep.active&&data.rep.qty>0){
+      if(data.rep.type==='deduct'){const d=data.rep.qty*sku.price;line=Math.max(0,line-d);tag=`<span class="tag tag-danger">Replacement deduct: -Rs. ${d}</span>`;}
+      else{tag=`<span class="tag tag-info">Replacement: ${data.rep.qty} units swapped</span>`;}
+    }
+    grand+=line;
+    html+=`<div class="review-row"><div style="flex:1;min-width:0;"><div class="review-sku">${sku.name}</div><div class="review-detail">${data.qty} x Rs. ${sku.price}</div>${tag}</div><div class="review-amt">Rs. ${line}</div></div>`;
+  }
+  document.getElementById('review-items').innerHTML=html;
+  document.getElementById('review-total').textContent=`Rs. ${grand}`;
+}
+function selPay(mode){
+  selPayMode=mode;
+  ['cash','upi','credit'].forEach(m=>document.getElementById('pay-'+m).classList.toggle('sel',m===mode));
+}
+
+// ── SAVE ORDER ──
+function saveOrder(){
+  const entries=Object.entries(curOrder);
+  if(!entries.length){toast('Add at least one item');return;}
+  let grand=0; const lines=[];
+  for(const[skuId,data] of entries){
+    const sku=SKUS.find(s=>s.id===skuId);
+    let line=(data.qty||0)*sku.price; let repNote=null;
+    stockMap[skuId]=Math.max(0,(stockMap[skuId]??sku.stock)-(data.qty||0));
+    if(data.rep&&data.rep.active&&data.rep.qty>0){
+      if(data.rep.type==='deduct'){const ded=data.rep.qty*sku.price;line=Math.max(0,line-ded);repNote={type:'deduct',qty:data.rep.qty,deductAmt:ded};}
+      else{stockMap[skuId]=Math.max(0,stockMap[skuId]-data.rep.qty);repNote={type:'replace',qty:data.rep.qty};}
+    }
+    grand+=line;
+    lines.push({skuId,skuName:sku.name,qty:data.qty||0,price:sku.price,amount:line,rep:repNote});
+  }
+  const order={
+    id:'ORD-'+Date.now(),
+    merchantId:curMerchant.id,merchantName:curMerchant.name,
+    items:lines,total:grand,payment:selPayMode,
+    note:document.getElementById('order-note').value.trim(),
+    time:new Date().toISOString(),
+  };
+  // Save to Firestore (Admin will see it in real-time)
+  db.collection('orders').doc(order.id).set(order).catch(console.error);
+  orders.unshift(order);
+  renderMerchants(); renderOrders(); renderStock(); updateStats();
+  toast('Order saved'); navTo('home');
+}
+
+// ════════════════════════════════════
+// ORDERS LIST
+// ════════════════════════════════════
+function isToday(o){return new Date(o.time).toDateString()===new Date().toDateString();}
+
+function renderOrders(){
+  const list=document.getElementById('orders-list');
+  const tod=orders.filter(isToday);
+  document.getElementById('orders-total').textContent=`Rs. ${tod.reduce((s,o)=>s+o.total,0)}`;
+  if(!tod.length){list.innerHTML=`<div class="empty-state"><div class="empty-title">No orders yet</div><div class="empty-desc">Start from the home screen</div></div>`;return;}
+  const smap={cash:'s-cash',upi:'s-upi',credit:'s-credit'};
+  const lmap={cash:'Cash',upi:'UPI',credit:'Credit'};
+  list.innerHTML=tod.map(o=>{
+    const t=new Date(o.time);
+    const hasRep=o.items.some(it=>it.rep);
+    return `<div class="order-card">
+      <div class="order-top" onclick="openDetail('${o.id}')">
+        <div>
+          <div class="order-merchant">${o.merchantName}</div>
+          <div class="order-meta">${t.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}${hasRep?' · Replacement':''}</div>
+        </div>
+        <div class="order-amount">Rs. ${o.total}</div>
+      </div>
+      <div style="margin-top:8px;">
+        <span class="status-tag ${smap[o.payment]}">${lmap[o.payment]}</span>
+        <span style="font-size:11px;color:var(--text2);margin-left:8px;">${o.items.length} SKU${o.items.length>1?'s':''}</span>
+      </div>
+      <div class="pay-update-row">
+        <div class="pay-chip ${o.payment==='cash'?'active-cash':''}" onclick="updatePayment('${o.id}','cash')">Cash</div>
+        <div class="pay-chip ${o.payment==='upi'?'active-upi':''}" onclick="updatePayment('${o.id}','upi')">UPI</div>
+        <div class="pay-chip ${o.payment==='credit'?'active-credit':''}" onclick="updatePayment('${o.id}','credit')">Credit</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── UPDATE PAYMENT STATUS + OPEN INVOICE ──
+function updatePayment(orderId, newMode) {
+  const idx=orders.findIndex(o=>o.id===orderId);
+  if(idx<0) return;
+  orders[idx].payment=newMode;
+  db.collection('orders').doc(orderId).update({payment:newMode}).catch(console.error);
+  renderOrders(); updateStats();
+  // Open invoice detail for this order with updated mode
+  openDetail(orderId);
+}
+
+function openDetail(oid){
+  const o=orders.find(x=>x.id===oid); if(!o) return;
+  activeOrder=o;
+  const t=new Date(o.time);
+  document.getElementById('det-merchant').textContent=o.merchantName;
+  document.getElementById('det-time').textContent=
+    t.toLocaleDateString('en-IN',{day:'numeric',month:'short'})+' · '+
+    t.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
+  document.getElementById('det-items').innerHTML=o.items.map(it=>{
+    let tag='';
+    if(it.rep) tag=it.rep.type==='deduct'
+      ?`<span class="tag tag-danger">Deducted Rs. ${it.rep.deductAmt}</span>`
+      :`<span class="tag tag-info">Replaced ${it.rep.qty} units</span>`;
+    return `<div class="review-row"><div style="flex:1;"><div class="review-sku">${it.skuName}</div><div class="review-detail">${it.qty} x Rs. ${it.price}</div>${tag}</div><div class="review-amt">Rs. ${it.amount}</div></div>`;
+  }).join('');
+  document.getElementById('det-total').textContent=`Rs. ${o.total}`;
+  const pmap={cash:'Cash',upi:'UPI / Online',credit:'Credit'};
+  document.getElementById('det-pay').textContent=pmap[o.payment]||o.payment;
+  document.getElementById('det-status').textContent=o.payment==='credit'?'Pending':'Paid';
+  showS('s-detail');
+}
+
+// ════════════════════════════════════
+// STOCK
+// ════════════════════════════════════
+function renderStock(){
+  const todayKey=new Date().toISOString().slice(0,10);
+  const todaySE=agentSE[todayKey]||{};
+  const todayTray=agentTrays[todayKey]||{};
+  // Received-today banner
+  const receivedBar=document.getElementById('stock-received-bar');
+  const receivedItems=document.getElementById('stock-received-items');
+  const receivedBill=document.getElementById('stock-received-bill');
+  const hasEntry=SKUS.some(s=>todaySE[s.id]>0);
+  if(hasEntry && receivedBar){
+    receivedBar.style.display='block';
+    let bill=0;
+    receivedItems.innerHTML=SKUS.filter(s=>todaySE[s.id]>0).map(s=>{
+      bill+=todaySE[s.id]*s.price;
+      return `<span style="background:#dbeafe;color:#1e40af;border-radius:20px;padding:3px 10px;font-size:11px;font-weight:600">${s.name} ×${todaySE[s.id]}</span>`;
+    }).join('');
+    receivedBill.textContent=`Rs. ${bill.toLocaleString('en-IN')}`;
+    // Sub-label with tray info
+    const sub=document.getElementById('stock-sub');
+    if(sub){
+      const parts=[];
+      if(todayTray.full) parts.push(`${todayTray.full} full trays in`);
+      if(todayTray.empty) parts.push(`${todayTray.empty} empty trays out`);
+      sub.textContent=parts.length?parts.join(' · '):'Today\'s inventory';
+    }
+  } else {
+    if(receivedBar) receivedBar.style.display='none';
+  }
+  // Stock cards
+  if(!SKUS.length){
+    document.getElementById('stock-list').innerHTML=`<div class="empty-state" style="margin-top:32px"><div class="empty-title">No products yet</div><div class="empty-desc">Ask admin to add products</div></div>`;
+    return;
+  }
+  document.getElementById('stock-list').innerHTML=SKUS.map(sku=>{
+    const av=stockMap[sku.id]??sku.stock;
+    const received=todaySE[sku.id]||0;
+    const pct=sku.stock>0?Math.min(100,Math.round((av/sku.stock)*100)):0;
+    const cls=pct<20?'low':pct<40?'warn':'ok';
+    return `<div class="stock-card">
+      <div class="stock-top">
+        <div><div class="stock-name">${sku.name}</div><div class="stock-price">Rs. ${sku.price} / piece</div></div>
+        <div><div class="stock-count txt-${cls}">${av}</div><div class="stock-unit">pcs left</div></div>
+      </div>
+      <div class="stock-bar"><div class="bar-${cls}" style="width:${pct}%;height:100%;border-radius:2px;transition:width .4s"></div></div>
+      ${received>0?`<div class="stock-received"><span class="stock-received-lbl">Received today</span><span class="stock-received-val">${received} units</span></div>`:''}
+    </div>`;
+  }).join('');
+}
+
+// ── STOCK ENTRY BOTTOM SHEET ──
+function openStockEntry(){
+  if(!SKUS.length){toast('No products configured. Contact admin.');return;}
+  const todayKey=new Date().toISOString().slice(0,10);
+  const saved=agentSE[todayKey]||{};
+  const tray=agentTrays[todayKey]||{};
+  document.getElementById('stock-sheet-date').textContent=
+    new Date().toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  document.getElementById('sheet-tray-full').value=tray.full||'';
+  document.getElementById('sheet-tray-empty').value=tray.empty||'';
+  document.getElementById('stock-sheet-products').innerHTML=SKUS.map(s=>`
+    <div class="se-row">
+      <div class="se-info">
+        <div class="se-pname">${s.name}</div>
+        <div class="se-pprice">Rs. ${s.price} / unit</div>
+      </div>
+      <div class="se-qty-wrap">
+        <button class="se-qty-btn" onclick="adjSeQty('${s.id}',-1)">−</button>
+        <input class="se-qty-inp" type="number" id="seq-${s.id}" value="${saved[s.id]||0}" min="0" oninput="calcAgentBill()"/>
+        <button class="se-qty-btn" onclick="adjSeQty('${s.id}',1)">+</button>
+      </div>
+      <div class="se-sub-val" id="ses-${s.id}">${saved[s.id]?`Rs.${(saved[s.id]*s.price).toLocaleString('en-IN')}`:'—'}</div>
+    </div>`).join('');
+  calcAgentBill();
+  document.getElementById('stock-sheet-overlay').classList.add('open');
+  document.getElementById('stock-sheet').classList.add('open');
+}
+function adjSeQty(skuId,delta){
+  const el=document.getElementById('seq-'+skuId);
+  if(!el) return;
+  el.value=Math.max(0,(parseInt(el.value||0)||0)+delta);
+  calcAgentBill();
+}
+function calcAgentBill(){
+  let bill=0;
+  SKUS.forEach(s=>{
+    const q=parseInt(document.getElementById('seq-'+s.id)?.value||0)||0;
+    const sub=q*s.price; bill+=sub;
+    const el=document.getElementById('ses-'+s.id);
+    if(el) el.textContent=q>0?`Rs.${sub.toLocaleString('en-IN')}`:'—';
+  });
+  document.getElementById('stock-sheet-bill').textContent=`Rs. ${bill.toLocaleString('en-IN')}`;
+}
+function closeStockEntry(){
+  document.getElementById('stock-sheet-overlay').classList.remove('open');
+  document.getElementById('stock-sheet').classList.remove('open');
+}
+function saveAgentStock(){
+  const todayKey=new Date().toISOString().slice(0,10);
+  const entry={};
+  SKUS.forEach(s=>{
+    const q=parseInt(document.getElementById('seq-'+s.id)?.value||0)||0;
+    if(q>0) entry[s.id]=q;
+  });
+  const full=parseInt(document.getElementById('sheet-tray-full')?.value||0)||0;
+  const empty=parseInt(document.getElementById('sheet-tray-empty')?.value||0)||0;
+  // Update local state immediately for fast UI
+  agentSE[todayKey]=entry;
+  agentTrays[todayKey]={full,empty};
+  // Sync stockMap: received minus sold today
+  const todayOrds=orders.filter(o=>new Date(o.time).toDateString()===new Date().toDateString());
+  SKUS.forEach(s=>{
+    const recv=entry[s.id]||0;
+    const sold=todayOrds.reduce((sum,o)=>sum+o.items.filter(it=>it.skuId===s.id).reduce((ss,it)=>ss+it.qty,0),0);
+    stockMap[s.id]=Math.max(0,recv-sold);
+  });
+  // Write to Firestore (Admin sees instantly)
+  db.collection('stockEntries').doc(todayKey).set(entry).catch(console.error);
+  db.collection('trays').doc(todayKey).set({full,empty}).catch(console.error);
+  closeStockEntry();
+  renderStock();
+  toast('Stock saved');
+}
+
+// ════════════════════════════════════
+// EXPENSES
+// ════════════════════════════════════
+function addExpense(){
+  const desc=document.getElementById('exp-desc').value.trim();
+  const amt=parseFloat(document.getElementById('exp-amt').value);
+  if(!desc){toast('Enter a description');return;}
+  if(!amt||amt<=0){toast('Enter a valid amount');return;}
+  const exp={id:'EXP-'+Date.now(),desc,amount:amt,time:new Date().toISOString()};
+  expenses.unshift(exp);
+  db.collection('expenses').doc(exp.id).set(exp).catch(console.error);
+  document.getElementById('exp-desc').value='';
+  document.getElementById('exp-amt').value='';
+  renderExpenses(); updateStats();
+  toast('Expense added');
+}
+function renderExpenses(){
+  const list=document.getElementById('expenses-list');
+  const tod=expenses.filter(e=>new Date(e.time).toDateString()===new Date().toDateString());
+  const total=tod.reduce((s,e)=>s+e.amount,0);
+  document.getElementById('exp-total-hdr').textContent=`Rs. ${total}`;
+  if(!tod.length){list.innerHTML=`<div class="empty-state"><div class="empty-title">No expenses today</div><div class="empty-desc">Add your first expense above</div></div>`;return;}
+  list.innerHTML=tod.map(e=>{
+    const t=new Date(e.time);
+    return `<div class="expense-card"><div class="expense-top"><div><div class="expense-desc">${e.desc}</div><div class="expense-meta">${t.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}</div></div><div class="expense-amount">Rs. ${e.amount}</div></div></div>`;
+  }).join('');
+}
+
+// ════════════════════════════════════
+// STATS
+// ════════════════════════════════════
+function updateStats(){
+  const tod=orders.filter(isToday);
+  const rev=tod.reduce((s,o)=>s+o.total,0);
+  const coll=tod.filter(o=>o.payment!=='credit').reduce((s,o)=>s+o.total,0);
+  const pend=tod.filter(o=>o.payment==='credit').reduce((s,o)=>s+o.total,0);
+  document.getElementById('st-rev').textContent=`Rs. ${rev}`;
+  document.getElementById('st-merchants').textContent=new Set(tod.map(o=>o.merchantId)).size;
+  document.getElementById('st-coll').textContent=`Rs. ${coll}`;
+  document.getElementById('st-pend').textContent=`Rs. ${pend}`;
+}
+
+// ════════════════════════════════════
+// NOTIFICATIONS — 4PM start, every 2hr
+// ════════════════════════════════════
+function scheduleNotifications(){
+  checkAndShowNotif(); // check on load
+  setInterval(checkAndShowNotif, 60000); // check every minute
+}
+function checkAndShowNotif(){
+  const now=new Date();
+  const h=now.getHours(), m=now.getMinutes();
+  // Fire at 16:00, 18:00, 20:00, 22:00
+  const fireTimes=[16,18,20,22];
+  if(!fireTimes.includes(h)||m!==0) return;
+  // Check pending credit orders today
+  const pendingOrders=orders.filter(o=>isToday(o)&&o.payment==='credit');
+  if(!pendingOrders.length) return;
+  const total=pendingOrders.reduce((s,o)=>s+o.total,0);
+  document.getElementById('notif-text').textContent=
+    `${pendingOrders.length} order${pendingOrders.length>1?'s':''} with pending credit payment — Rs. ${total} to collect.`;
+  document.getElementById('notif-banner').classList.add('show');
+  // Also try browser notification
+  if(Notification&&Notification.permission==='granted'){
+    new Notification('ModernBread — Pending Bills',{
+      body:`${pendingOrders.length} credit order(s) unpaid. Total: Rs. ${total}`,
+      tag:'mb-pending'
+    });
+  }
+}
+function dismissNotif(){document.getElementById('notif-banner').classList.remove('show');}
+
+// Request notification permission
+if(typeof Notification!=='undefined'&&Notification.permission==='default'){
+  Notification.requestPermission();
+}
+
+// ════════════════════════════════════
+// PDF
+// ════════════════════════════════════
+function downloadPDF(o){
+  if(!o) return;
+  const{jsPDF}=window.jspdf;
+  const doc=new jsPDF({unit:'mm',format:'a5'});
+  const W=doc.internal.pageSize.getWidth();
+  doc.setFillColor(20,20,20);doc.rect(0,0,W,26,'F');
+  doc.setTextColor(255,255,255);
+  doc.setFont('helvetica','bold');doc.setFontSize(15);doc.text('ModernBread',12,11);
+  doc.setFont('helvetica','normal');doc.setFontSize(8);
+  doc.text('Distribution Invoice',12,18);
+  doc.text(o.id,W-12,11,{align:'right'});
+  doc.text(new Date(o.time).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}),W-12,18,{align:'right'});
+  doc.setTextColor(30,30,30);
+  doc.setFont('helvetica','bold');doc.setFontSize(10);doc.text('Bill To',12,34);
+  doc.setFont('helvetica','normal');doc.setFontSize(10);doc.text(o.merchantName,12,40);
+  const pm={cash:'Cash (Collected)',upi:'UPI / Online (Paid)',credit:'Credit (Collect Later)'};
+  doc.setFont('helvetica','bold');doc.text('Payment',W-55,34);
+  doc.setFont('helvetica','normal');doc.text(pm[o.payment]||o.payment,W-55,40);
+  const body=[];
+  o.items.forEach(it=>{
+    body.push([it.skuName,it.qty,`Rs.${it.price}`,`Rs.${it.amount}`]);
+    if(it.rep){
+      if(it.rep.type==='replace') body.push([`  Replacement: ${it.rep.qty} units swapped`,'','','']);
+      else body.push([`  Replacement deduct (${it.rep.qty} units)`,'','',`-Rs.${it.rep.deductAmt}`]);
+    }
+  });
+  doc.autoTable({
+    startY:50,
+    head:[['Product','Qty','Rate','Amount']],
+    body,
+    foot:[['','','Total',`Rs.${o.total}`]],
+    headStyles:{fillColor:[20,20,20],textColor:255,fontStyle:'bold',fontSize:9},
+    footStyles:{fillColor:[240,240,240],textColor:[20,20,20],fontStyle:'bold',fontSize:10},
+    bodyStyles:{fontSize:9,textColor:[30,30,30]},
+    alternateRowStyles:{fillColor:[250,250,250]},
+    columnStyles:{0:{cellWidth:'auto'},1:{halign:'center',cellWidth:14},2:{halign:'right',cellWidth:22},3:{halign:'right',cellWidth:26}},
+    margin:{left:12,right:12},styles:{font:'helvetica',cellPadding:3},
+    didParseCell(d){if(d.row.index>0&&String(d.cell.raw).startsWith('  Replacement')){d.cell.styles.textColor=[120,120,120];d.cell.styles.fontStyle='italic';}}
+  });
+  if(o.note){doc.setFontSize(8);doc.setTextColor(120,120,120);doc.text(`Note: ${o.note}`,12,doc.lastAutoTable.finalY+6);}
+  doc.setFontSize(7);doc.setTextColor(160,160,160);
+  doc.text('Thank you for your business.',W/2,doc.internal.pageSize.getHeight()-8,{align:'center'});
+  doc.save(`Invoice-${o.merchantName.replace(/\s+/g,'-')}-${o.id}.pdf`);
+  toast('Invoice downloaded');
+}
+
+// ════════════════════════════════════
+// WHATSAPP
+// ════════════════════════════════════
+function shareWA(o){
+  if(!o) return;
+  const lines=o.items.map(it=>{
+    let s=`- ${it.skuName}: ${it.qty} x Rs.${it.price} = Rs.${it.amount}`;
+    if(it.rep) s+=it.rep.type==='replace'?`\n  (Replacement: ${it.rep.qty} units swapped)`:`\n  (Replacement deduct: -Rs.${it.rep.deductAmt})`;
+    return s;
+  }).join('\n');
+  const pm={cash:'Cash (collected)',upi:'UPI (paid)',credit:'Credit (pending)'};
+  const msg=`*ModernBread Invoice*\nMerchant: *${o.merchantName}*\nDate: ${new Date(o.time).toLocaleDateString('en-IN')}\n\n${lines}\n\n*Total: Rs.${o.total}*\nPayment: ${pm[o.payment]||o.payment}\nRef: ${o.id}`;
+  window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`,'_blank');
+}
+
+// ════════════════════════════════════
+// TOAST
+// ════════════════════════════════════
+function toast(msg){
+  const el=document.getElementById('toast');
+  el.textContent=msg; el.classList.add('show');
+  setTimeout(()=>el.classList.remove('show'),2200);
+}
+
+init();
+</script>
+</body>
+</html>
