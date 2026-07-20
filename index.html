@@ -280,19 +280,19 @@ select.form-field{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 
 /* UPI payment */
-.upi-wrap{flex:1;display:flex;flex-direction:column;justify-content:space-between;padding:18px 18px calc(16px + env(safe-area-inset-bottom));background:var(--bg)}
+.upi-wrap{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;display:flex;flex-direction:column;gap:16px;padding:18px 18px calc(32px + env(safe-area-inset-bottom));background:var(--bg)}
 .upi-card{text-align:center;padding:20px 18px;border:1px solid var(--border);border-radius:20px;background:var(--bg)}
 .upi-logo{width:46px;height:46px;object-fit:contain;border-radius:10px;margin-bottom:12px}
 .upi-title{font-size:18px;font-weight:800;letter-spacing:-.2px}
 .upi-sub{font-size:12px;color:var(--text2);margin-top:3px}
 .upi-amount{font-size:34px;font-weight:800;letter-spacing:-.4px;margin:18px 0 14px}
-.qr-frame{width:min(78vw,290px);aspect-ratio:1;margin:0 auto;border:1px solid var(--border);border-radius:18px;padding:14px;background:#fff;display:flex;align-items:center;justify-content:center}
+.qr-frame{width:min(72vw,260px);aspect-ratio:1;margin:0 auto;border:1px solid var(--border);border-radius:18px;padding:12px;background:#fff;display:flex;align-items:center;justify-content:center}
 .qr-frame img{width:100%;height:100%;object-fit:contain}
 .qr-missing{font-size:12px;color:var(--text2);line-height:1.5;padding:20px}
 .pay-switch{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:16px}
 .pay-switch button{border:1.5px solid var(--border2);background:var(--bg);border-radius:999px;padding:9px 6px;font-family:'Inter',sans-serif;font-size:12px;font-weight:700;color:var(--text2)}
 .pay-switch button.active{background:var(--text);border-color:var(--text);color:#fff}
-.upi-foot{display:grid;gap:10px;margin-top:16px}
+.upi-foot{display:grid;gap:10px;margin-top:0;flex-shrink:0}
 .success-layer{position:fixed;inset:0;z-index:10000;background:rgba(255,255,255,.94);display:none;align-items:center;justify-content:center;flex-direction:column}
 .success-layer.show{display:flex;animation:fadeIn .18s ease-out}
 .success-circle{width:98px;height:98px;border-radius:50%;background:#19a85a;display:flex;align-items:center;justify-content:center;box-shadow:0 18px 45px rgba(25,168,90,.28);animation:successPop .42s cubic-bezier(.2,1.5,.35,1)}
@@ -520,8 +520,8 @@ select.form-field{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
       <div class="upi-sub">Ask the merchant to scan this QR code</div>
       <div class="upi-amount" id="upi-amount">Rs. 0</div>
       <div class="qr-frame">
-        <img id="upi-qr-img" src="./assets/upi-qr.png" alt="UPI QR code"/>
-        <div class="qr-missing" id="upi-qr-missing" style="display:none">Add your QR image as <strong>assets/upi-qr.png</strong> in the Agent repo.</div>
+        <img id="upi-qr-img" src="./assets/qr-code.jpg" alt="UPI QR code"/>
+        <div class="qr-missing" id="upi-qr-missing" style="display:none">QR image not found. Add it as <strong>assets/qr-code.jpg</strong> in the Agent repo.</div>
       </div>
       <div class="pay-switch">
         <button onclick="changeUpiMethod('cash')">Cash</button>
@@ -665,10 +665,24 @@ let agentSE  = {};   // populated by Firestore stockEntries listener
 let agentTrays = {}; // populated by Firestore trays listener
 let activeOrder=null, curRepType='replace';
 let holdTimer=null;
-const UPI_QR_FILES=['./assets/upi-qr.png','./assets/qr-code.jpg','./assets/payment-qr.png','./assets/qr.png','./assets/qrcode.png'];
+const UPI_QR_FILES=['./assets/qr-code.jpg','./assets/upi-qr.png','./assets/payment-qr.png','./assets/qr.png','./assets/qrcode.png'];
 function sortSkus(){
   SKUS.sort((a,b)=>((a.sortOrder??999999)-(b.sortOrder??999999))||String(a.name||'').localeCompare(String(b.name||'')));
 }
+function compactDateKey(d=new Date()){
+  return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+}
+function nextOrderNumber(prefix='ORD', date=new Date()){
+  const key=compactDateKey(date);
+  const re=new RegExp(`^${prefix}-${key}-(\\d{3})$`);
+  const max=orders.reduce((m,o)=>{
+    const val=o.orderNo||o.id||'';
+    const match=String(val).match(re);
+    return match?Math.max(m,parseInt(match[1],10)):m;
+  },0);
+  return `${prefix}-${key}-${String(max+1).padStart(3,'0')}`;
+}
+function orderDisplayId(o){return (o&&o.orderNo)||((o&&o.id)||'');}
 
 const NO_NAV=['s-sku','s-review','s-detail','s-upi-pay'];
 
@@ -975,8 +989,10 @@ async function saveOrder(){
     grand+=line;
     lines.push({skuId,skuName:sku.name,qty:data.qty||0,price:sku.price,amount:line,rep:repNote});
   }
+  const orderNo=nextOrderNumber('ORD');
   const order={
-    id:'ORD-'+Date.now(),
+    id:orderNo,
+    orderNo,
     merchantId:curMerchant.id,merchantName:curMerchant.name,
     items:lines,total:grand,payment:selPayMode,
     paymentStatus:selPayMode==='credit'||selPayMode==='upi'?'pending':'received',
@@ -1367,7 +1383,7 @@ function normalizeWhatsAppNumber(raw){let n=String(raw||'').replace(/\D/g,'');if
 function invoiceMessage(o){
   const pm={cash:'Cash collected',upi:o.paymentStatus==='pending'?'UPI awaiting payment':'UPI paid',credit:'Credit pending'};
   const lines=o.items.map(it=>`- ${it.skuName}: ${it.qty} x Rs.${it.price} = Rs.${it.amount}`).join('\n');
-  return `Mitali Agency - Modern Bread Invoice\nDate: ${invoiceDateKey(o)}\nMerchant: ${o.merchantName}\nInvoice: ${o.id}\n\n${lines}\n\nTotal: Rs.${o.total}\nPayment: ${pm[o.payment]||o.payment}`;
+  return `Mitali Agency - Modern Bread Invoice\nDate: ${invoiceDateKey(o)}\nMerchant: ${o.merchantName}\nInvoice: ${orderDisplayId(o)}\n\n${lines}\n\nTotal: Rs.${o.total}\nPayment: ${pm[o.payment]||o.payment}`;
 }
 async function buildInvoicePdf(o){
   const{jsPDF}=window.jspdf;const doc=new jsPDF({unit:'mm',format:'a5'});const W=doc.internal.pageSize.getWidth(),H=doc.internal.pageSize.getHeight();
@@ -1377,13 +1393,13 @@ async function buildInvoicePdf(o){
   doc.setTextColor(17,17,17);doc.setFont('helvetica','bold');doc.setFontSize(15);doc.text('Mitali Agency',logo?39:12,16);
   doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(90,90,90);doc.text('Modern Bread Distributor | Roha-Raigad',logo?39:12,22);
   doc.setFont('helvetica','bold');doc.setFontSize(11);doc.setTextColor(17,17,17);doc.text('INVOICE',W-12,15,{align:'right'});
-  doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(90,90,90);doc.text(o.id,W-12,21,{align:'right'});doc.text(invoiceDateKey(o),W-12,26,{align:'right'});
+  doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(90,90,90);doc.text(orderDisplayId(o),W-12,21,{align:'right'});doc.text(invoiceDateKey(o),W-12,26,{align:'right'});
   doc.setDrawColor(230,230,230);doc.line(12,36,W-12,36);
   doc.setTextColor(17,17,17);doc.setFont('helvetica','bold');doc.setFontSize(9);doc.text('Bill To',12,45);doc.text('Payment',W-58,45);
   doc.setFont('helvetica','normal');doc.setFontSize(9);doc.text(o.merchantName,12,51);if(merchant.area)doc.text(merchant.area,12,56);if(merchant.phone)doc.text(`WhatsApp: ${merchant.phone}`,12,61);
   doc.text(pm[o.payment]||o.payment,W-58,51);
   const body=[];o.items.forEach(it=>{body.push([it.skuName,it.qty,`Rs.${it.price}`,`Rs.${it.amount}`]);if(it.rep)body.push([it.rep.type==='replace'?`Replacement: ${it.rep.qty} units swapped`:`Replacement deduct (${it.rep.qty})`,'','',it.rep.type==='deduct'?`-Rs.${it.rep.deductAmt}`:'']);});
-  doc.autoTable({startY:70,head:[['Product','Qty','Rate','Amount']],body,foot:[['','','Grand Total',`Rs.${o.total}`]],headStyles:{fillColor:[23,23,23],textColor:255,fontStyle:'bold',fontSize:8},bodyStyles:{fontSize:8,textColor:[30,30,30]},footStyles:{fillColor:[245,245,245],textColor:[17,17,17],fontStyle:'bold',fontSize:9},alternateRowStyles:{fillColor:[252,252,252]},columnStyles:{1:{halign:'center',cellWidth:14},2:{halign:'right',cellWidth:23},3:{halign:'right',cellWidth:27}},margin:{left:12,right:12},styles:{font:'helvetica',cellPadding:3}});
+  doc.autoTable({startY:70,head:[['Product','Qty','Rate','Amount']],body,foot:[[{content:'Grand Total',colSpan:3,styles:{halign:'right'}},`Rs.${o.total}`]],headStyles:{fillColor:[23,23,23],textColor:255,fontStyle:'bold',fontSize:8},bodyStyles:{fontSize:8,textColor:[30,30,30]},footStyles:{fillColor:[245,245,245],textColor:[17,17,17],fontStyle:'bold',fontSize:9},alternateRowStyles:{fillColor:[252,252,252]},columnStyles:{1:{halign:'center',cellWidth:14},2:{halign:'right',cellWidth:23},3:{halign:'right',cellWidth:27}},margin:{left:12,right:12},styles:{font:'helvetica',cellPadding:3}});
   if(o.note){doc.setFontSize(8);doc.setTextColor(90,90,90);doc.text(`Note: ${o.note}`,12,doc.lastAutoTable.finalY+8);}
   doc.setDrawColor(230,230,230);doc.line(12,H-18,W-12,H-18);doc.setFontSize(7);doc.setTextColor(120,120,120);doc.text('Thank you for your business.',W/2,H-11,{align:'center'});
   return doc;
