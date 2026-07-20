@@ -70,7 +70,12 @@
             if (error) throw error;
           },
           async delete() {
-            const { error } = await client.from(table).update({ deleted_at: new Date().toISOString() }).eq("id", docId);
+            const current = await client.from(table).select("data").eq("id", docId).maybeSingle();
+            if (current.error) throw current.error;
+            const { error } = await client
+              .from(table)
+              .update({ data: (current.data && current.data.data) || {}, deleted_at: new Date().toISOString() })
+              .eq("id", docId);
             if (error) throw error;
           }
         };
