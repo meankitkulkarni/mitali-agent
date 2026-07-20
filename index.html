@@ -201,6 +201,7 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-
 .pay-chip.active-cash{border-color:var(--green);background:var(--green-bg);color:var(--green)}
 .pay-chip.active-upi{border-color:#1a4fa0;background:var(--info-bg);color:var(--info-text)}
 .pay-chip.active-credit{border-color:#92600a;background:var(--warn-bg);color:var(--warn-text)}
+.pay-chip.danger{flex:.8;border-color:#ffd0c8;background:var(--danger-bg);color:var(--danger-text)}
 
 /* ── STOCK ── */
 .stock-card{background:var(--bg);border:1px solid var(--border);border-radius:var(--r);padding:14px 16px;margin-bottom:8px}
@@ -850,6 +851,21 @@ function renderMerchants(q='') {
     </div>`;
   }).join('');
 }
+
+async function deleteOrder(orderId){
+  const order=orders.find(o=>o.id===orderId);
+  if(!order)return;
+  if(!confirm(`Delete order ${orderDisplayId(order)} for ${order.merchantName}?`))return;
+  try{
+    await db.collection('orders').doc(orderId).delete();
+    orders=orders.filter(o=>o.id!==orderId);
+    renderMerchants(); renderOrders(); updateStats();
+    if(activeOrder&&activeOrder.id===orderId){activeOrder=null;showS('s-orders');}
+  }catch(err){
+    console.error(err);
+    alert('Could not delete this order. Please try again.');
+  }
+}
 function filterMerchants(){renderMerchants(document.getElementById('merchant-search').value);}
 
 // ════════════════════════════════════
@@ -1107,6 +1123,7 @@ function renderOrders(){
         <div class="pay-chip ${o.payment==='cash'?'active-cash':''}" onclick="updatePayment('${o.id}','cash')">Cash</div>
         <div class="pay-chip ${o.payment==='upi'?'active-upi':''}" onclick="updatePayment('${o.id}','upi')">UPI</div>
         <div class="pay-chip ${o.payment==='credit'?'active-credit':''}" onclick="updatePayment('${o.id}','credit')">Credit</div>
+        <div class="pay-chip danger" onclick="deleteOrder('${o.id}')">Delete</div>
       </div>
     </div>`;
   }).join('');

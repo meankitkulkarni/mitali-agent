@@ -70,6 +70,11 @@
             if (error) throw error;
           },
           async delete() {
+            if (collectionName === "orders" || collectionName === "expenses") {
+              const { error } = await client.from(table).delete().eq("id", docId);
+              if (error) throw error;
+              return;
+            }
             const current = await client.from(table).select("data").eq("id", docId).maybeSingle();
             if (current.error) throw current.error;
             const { error } = await client
