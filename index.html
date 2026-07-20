@@ -279,6 +279,30 @@ select.form-field{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
 .toast{position:fixed;bottom:calc(68px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%) translateY(10px);background:var(--text);color:#fff;padding:10px 18px;border-radius:20px;font-size:13px;font-weight:500;z-index:9999;opacity:0;transition:all .25s;pointer-events:none;white-space:nowrap}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 
+/* UPI payment */
+.upi-wrap{flex:1;display:flex;flex-direction:column;justify-content:space-between;padding:18px 18px calc(16px + env(safe-area-inset-bottom));background:var(--bg)}
+.upi-card{text-align:center;padding:20px 18px;border:1px solid var(--border);border-radius:20px;background:var(--bg)}
+.upi-logo{width:46px;height:46px;object-fit:contain;border-radius:10px;margin-bottom:12px}
+.upi-title{font-size:18px;font-weight:800;letter-spacing:-.2px}
+.upi-sub{font-size:12px;color:var(--text2);margin-top:3px}
+.upi-amount{font-size:34px;font-weight:800;letter-spacing:-.4px;margin:18px 0 14px}
+.qr-frame{width:min(78vw,290px);aspect-ratio:1;margin:0 auto;border:1px solid var(--border);border-radius:18px;padding:14px;background:#fff;display:flex;align-items:center;justify-content:center}
+.qr-frame img{width:100%;height:100%;object-fit:contain}
+.qr-missing{font-size:12px;color:var(--text2);line-height:1.5;padding:20px}
+.pay-switch{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:16px}
+.pay-switch button{border:1.5px solid var(--border2);background:var(--bg);border-radius:999px;padding:9px 6px;font-family:'Inter',sans-serif;font-size:12px;font-weight:700;color:var(--text2)}
+.pay-switch button.active{background:var(--text);border-color:var(--text);color:#fff}
+.upi-foot{display:grid;gap:10px;margin-top:16px}
+.success-layer{position:fixed;inset:0;z-index:10000;background:rgba(255,255,255,.94);display:none;align-items:center;justify-content:center;flex-direction:column}
+.success-layer.show{display:flex;animation:fadeIn .18s ease-out}
+.success-circle{width:98px;height:98px;border-radius:50%;background:#19a85a;display:flex;align-items:center;justify-content:center;box-shadow:0 18px 45px rgba(25,168,90,.28);animation:successPop .42s cubic-bezier(.2,1.5,.35,1)}
+.success-circle svg{width:56px;height:56px;stroke:#fff;stroke-width:4;fill:none;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:52;stroke-dashoffset:52;animation:drawTick .38s ease-out .18s forwards}
+.success-title{font-size:20px;font-weight:800;margin-top:18px;color:#128046}
+.success-sub{font-size:13px;color:var(--text2);margin-top:4px}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes successPop{0%{transform:scale(.72);opacity:.4}70%{transform:scale(1.08);opacity:1}100%{transform:scale(1)}}
+@keyframes drawTick{to{stroke-dashoffset:0}}
+
 /* ── NOTIFICATION BANNER ── */
 .notif-banner{position:fixed;top:0;left:0;right:0;z-index:999;background:var(--warn-bg);border-bottom:1px solid #e8c97a;padding:12px 16px;display:flex;align-items:flex-start;gap:12px;transform:translateY(-100%);transition:transform .3s ease;font-size:13px}
 .notif-banner.show{transform:translateY(0)}
@@ -475,7 +499,40 @@ select.form-field{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
     </div>
     <button class="btn-primary" onclick="downloadPDF(activeOrder)">Download Invoice PDF</button>
     <button class="btn-secondary" onclick="shareWA(activeOrder)">Share on WhatsApp</button>
+    <div id="det-pay-actions" style="margin-top:8px"></div>
     <div style="height:8px;"></div>
+  </div>
+</div>
+
+<!-- UPI PAYMENT -->
+<div id="s-upi-pay" class="screen">
+  <div class="topbar">
+    <div class="back-btn" onclick="openDetail(activeOrder&&activeOrder.id)"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 12H5M12 5l-7 7 7 7"/></svg></div>
+    <div class="topbar-info">
+      <div class="topbar-title">UPI Payment</div>
+      <div class="topbar-sub" id="upi-merchant">—</div>
+    </div>
+  </div>
+  <div class="upi-wrap">
+    <div class="upi-card">
+      <img class="upi-logo" src="./assets/mitali-logo.png" alt="Mitali Agency"/>
+      <div class="upi-title">Scan & Pay</div>
+      <div class="upi-sub">Ask the merchant to scan this QR code</div>
+      <div class="upi-amount" id="upi-amount">Rs. 0</div>
+      <div class="qr-frame">
+        <img id="upi-qr-img" src="./assets/upi-qr.png" alt="UPI QR code"/>
+        <div class="qr-missing" id="upi-qr-missing" style="display:none">Add your QR image as <strong>assets/upi-qr.png</strong> in the Agent repo.</div>
+      </div>
+      <div class="pay-switch">
+        <button onclick="changeUpiMethod('cash')">Cash</button>
+        <button class="active" onclick="changeUpiMethod('upi')">UPI</button>
+        <button onclick="changeUpiMethod('credit')">Credit</button>
+      </div>
+    </div>
+    <div class="upi-foot">
+      <button class="btn-primary" onclick="confirmUpiReceived()">Payment Received</button>
+      <button class="btn-secondary" onclick="openDetail(activeOrder&&activeOrder.id)">Back to Invoice</button>
+    </div>
   </div>
 </div>
 
@@ -575,6 +632,11 @@ select.form-field{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
 </div>
 
 <div class="toast" id="toast"></div>
+<div class="success-layer" id="success-layer">
+  <div class="success-circle"><svg viewBox="0 0 52 52"><path d="M14 27l8 8 17-19"/></svg></div>
+  <div class="success-title">Payment received</div>
+  <div class="success-sub" id="success-sub">Marked as collected</div>
+</div>
 
 <script>
 // ════════════════════════════════════
@@ -603,8 +665,9 @@ let agentSE  = {};   // populated by Firestore stockEntries listener
 let agentTrays = {}; // populated by Firestore trays listener
 let activeOrder=null, curRepType='replace';
 let holdTimer=null;
+const UPI_QR_FILES=['./assets/upi-qr.png','./assets/payment-qr.png','./assets/qr.png','./assets/qrcode.png'];
 
-const NO_NAV=['s-sku','s-review','s-detail'];
+const NO_NAV=['s-sku','s-review','s-detail','s-upi-pay'];
 
 // ════════════════════════════════════
 // BOOT
@@ -877,6 +940,20 @@ function selPay(mode){
   selPayMode=mode;
   ['cash','upi','credit'].forEach(m=>document.getElementById('pay-'+m).classList.toggle('sel',m===mode));
 }
+function isPaymentReceived(o){
+  return o&&o.payment!=='credit'&&o.paymentStatus!=='pending';
+}
+function paymentStatusText(o){
+  if(!o) return '—';
+  if(o.payment==='credit') return 'Pending';
+  if(o.payment==='upi'&&o.paymentStatus==='pending') return 'Awaiting UPI';
+  return 'Received';
+}
+function paymentLabel(o){
+  if(!o) return '—';
+  const base={cash:'Cash',upi:'UPI / Online',credit:'Credit'}[o.payment]||o.payment;
+  return o.payment==='upi'&&o.paymentStatus==='pending' ? 'UPI / Awaiting scan' : base;
+}
 
 // ── SAVE ORDER ──
 async function saveOrder(){
@@ -898,6 +975,8 @@ async function saveOrder(){
     id:'ORD-'+Date.now(),
     merchantId:curMerchant.id,merchantName:curMerchant.name,
     items:lines,total:grand,payment:selPayMode,
+    paymentStatus:selPayMode==='credit'||selPayMode==='upi'?'pending':'received',
+    paidAt:selPayMode==='cash'?new Date().toISOString():null,
     note:document.getElementById('order-note').value.trim(),
     time:new Date().toISOString(),
   };
@@ -914,7 +993,8 @@ async function saveOrder(){
   curOrder={};
   activeOrder=order;
   toast('Order saved');
-  openDetail(order.id);
+  if(order.payment==='upi') openUpiPayment(order.id);
+  else openDetail(order.id);
 }
 
 // ════════════════════════════════════
@@ -928,7 +1008,6 @@ function renderOrders(){
   document.getElementById('orders-total').textContent=`Rs. ${tod.reduce((s,o)=>s+o.total,0)}`;
   if(!tod.length){list.innerHTML=`<div class="empty-state"><div class="empty-title">No orders yet</div><div class="empty-desc">Start from the home screen</div></div>`;return;}
   const smap={cash:'s-cash',upi:'s-upi',credit:'s-credit'};
-  const lmap={cash:'Cash',upi:'UPI',credit:'Credit'};
   list.innerHTML=tod.map(o=>{
     const t=new Date(o.time);
     const hasRep=o.items.some(it=>it.rep);
@@ -941,7 +1020,7 @@ function renderOrders(){
         <div class="order-amount">Rs. ${o.total}</div>
       </div>
       <div style="margin-top:8px;">
-        <span class="status-tag ${smap[o.payment]}">${lmap[o.payment]}</span>
+        <span class="status-tag ${smap[o.payment]}">${paymentStatusText(o)}</span>
         <span style="font-size:11px;color:var(--text2);margin-left:8px;">${o.items.length} SKU${o.items.length>1?'s':''}</span>
       </div>
       <div class="pay-update-row">
@@ -954,14 +1033,27 @@ function renderOrders(){
 }
 
 // ── UPDATE PAYMENT STATUS + OPEN INVOICE ──
-function updatePayment(orderId, newMode) {
+async function updatePayment(orderId, newMode) {
   const idx=orders.findIndex(o=>o.id===orderId);
   if(idx<0) return;
-  orders[idx].payment=newMode;
-  db.collection('orders').doc(orderId).update({payment:newMode}).catch(console.error);
+  const patch={
+    payment:newMode,
+    paymentStatus:newMode==='credit'||newMode==='upi'?'pending':'received',
+    paidAt:newMode==='cash'?new Date().toISOString():null,
+    receivedMode:newMode==='cash'?'cash':null
+  };
+  Object.assign(orders[idx],patch);
+  try{
+    await db.collection('orders').doc(orderId).update(patch);
+  }catch(err){
+    console.error(err);
+    toast('Payment update failed');
+    return;
+  }
   renderOrders(); updateStats();
-  // Open invoice detail for this order with updated mode
-  openDetail(orderId);
+  if(newMode==='upi') openUpiPayment(orderId);
+  else if(newMode==='cash') showPaymentSuccess(orders[idx],()=>openDetail(orderId));
+  else openDetail(orderId);
 }
 
 function openDetail(oid){
@@ -980,10 +1072,74 @@ function openDetail(oid){
     return `<div class="review-row"><div style="flex:1;"><div class="review-sku">${it.skuName}</div><div class="review-detail">${it.qty} x Rs. ${it.price}</div>${tag}</div><div class="review-amt">Rs. ${it.amount}</div></div>`;
   }).join('');
   document.getElementById('det-total').textContent=`Rs. ${o.total}`;
-  const pmap={cash:'Cash',upi:'UPI / Online',credit:'Credit'};
-  document.getElementById('det-pay').textContent=pmap[o.payment]||o.payment;
-  document.getElementById('det-status').textContent=o.payment==='credit'?'Pending':'Paid';
+  document.getElementById('det-pay').textContent=paymentLabel(o);
+  document.getElementById('det-status').textContent=paymentStatusText(o);
+  const actions=document.getElementById('det-pay-actions');
+  if(actions){
+    if(o.payment==='upi'&&o.paymentStatus==='pending'){
+      actions.innerHTML=`<button class="btn-primary" onclick="openUpiPayment('${o.id}')">Show QR / Mark Received</button><button class="btn-secondary" onclick="updatePayment('${o.id}','cash')">Change to Cash Received</button><button class="btn-secondary" onclick="updatePayment('${o.id}','credit')">Move to Credit</button>`;
+    }else if(o.payment==='credit'){
+      actions.innerHTML=`<button class="btn-primary" onclick="updatePayment('${o.id}','upi')">Collect by UPI</button><button class="btn-secondary" onclick="updatePayment('${o.id}','cash')">Mark Cash Received</button>`;
+    }else{
+      actions.innerHTML='';
+    }
+  }
   showS('s-detail');
+}
+
+function openUpiPayment(orderId){
+  const o=orders.find(x=>x.id===orderId)||activeOrder;
+  if(!o) return;
+  activeOrder=o;
+  document.getElementById('upi-merchant').textContent=o.merchantName;
+  document.getElementById('upi-amount').textContent=`Rs. ${Number(o.total||0).toLocaleString('en-IN')}`;
+  const qr=document.getElementById('upi-qr-img');
+  const missing=document.getElementById('upi-qr-missing');
+  if(qr&&missing){
+    qr.style.display='block';
+    missing.style.display='none';
+    let idx=0;
+    qr.onerror=()=>{
+      idx++;
+      if(idx<UPI_QR_FILES.length) qr.src=UPI_QR_FILES[idx];
+      else{qr.style.display='none';missing.style.display='block';}
+    };
+    qr.src=UPI_QR_FILES[idx];
+  }
+  showS('s-upi-pay');
+}
+
+function changeUpiMethod(mode){
+  if(!activeOrder) return;
+  if(mode==='upi') return;
+  updatePayment(activeOrder.id,mode);
+}
+
+async function confirmUpiReceived(){
+  if(!activeOrder) return;
+  const patch={payment:'upi',paymentStatus:'received',paidAt:new Date().toISOString(),receivedMode:'upi'};
+  try{
+    await db.collection('orders').doc(activeOrder.id).update(patch);
+  }catch(err){
+    console.error(err);
+    toast('Could not mark received');
+    return;
+  }
+  Object.assign(activeOrder,patch);
+  const idx=orders.findIndex(o=>o.id===activeOrder.id);
+  if(idx>=0) Object.assign(orders[idx],patch);
+  renderOrders(); updateStats();
+  showPaymentSuccess(activeOrder,()=>openDetail(activeOrder.id));
+}
+
+function showPaymentSuccess(o,done){
+  const layer=document.getElementById('success-layer');
+  document.getElementById('success-sub').textContent=`Rs. ${Number(o.total||0).toLocaleString('en-IN')} received`;
+  layer.classList.add('show');
+  setTimeout(()=>{
+    layer.classList.remove('show');
+    if(done) done();
+  },1350);
 }
 
 // ════════════════════════════════════
@@ -1146,8 +1302,8 @@ function renderExpenses(){
 function updateStats(){
   const tod=orders.filter(isToday);
   const rev=tod.reduce((s,o)=>s+o.total,0);
-  const coll=tod.filter(o=>o.payment!=='credit').reduce((s,o)=>s+o.total,0);
-  const pend=tod.filter(o=>o.payment==='credit').reduce((s,o)=>s+o.total,0);
+  const coll=tod.filter(isPaymentReceived).reduce((s,o)=>s+o.total,0);
+  const pend=tod.filter(o=>!isPaymentReceived(o)).reduce((s,o)=>s+o.total,0);
   document.getElementById('st-rev').textContent=`Rs. ${rev}`;
   document.getElementById('st-merchants').textContent=new Set(tod.map(o=>o.merchantId)).size;
   document.getElementById('st-coll').textContent=`Rs. ${coll}`;
@@ -1168,7 +1324,7 @@ function checkAndShowNotif(){
   const fireTimes=[16,18,20,22];
   if(!fireTimes.includes(h)||m!==0) return;
   // Check pending credit orders today
-  const pendingOrders=orders.filter(o=>isToday(o)&&o.payment==='credit');
+  const pendingOrders=orders.filter(o=>isToday(o)&&!isPaymentReceived(o));
   if(!pendingOrders.length) return;
   const total=pendingOrders.reduce((s,o)=>s+o.total,0);
   document.getElementById('notif-text').textContent=
@@ -1205,13 +1361,13 @@ function invoiceFileName(o){return `invoice_${invoiceDateKey(o)}.pdf`;}
 function getOrderMerchant(o){return MERCHANTS.find(m=>m.id===o.merchantId)||{};}
 function normalizeWhatsAppNumber(raw){let n=String(raw||'').replace(/\D/g,'');if(n.length===10)n='91'+n;return n.length>=11?n:'';}
 function invoiceMessage(o){
-  const pm={cash:'Cash collected',upi:'UPI paid',credit:'Credit pending'};
+  const pm={cash:'Cash collected',upi:o.paymentStatus==='pending'?'UPI awaiting payment':'UPI paid',credit:'Credit pending'};
   const lines=o.items.map(it=>`- ${it.skuName}: ${it.qty} x Rs.${it.price} = Rs.${it.amount}`).join('\n');
   return `Mitali Agency - Modern Bread Invoice\nDate: ${invoiceDateKey(o)}\nMerchant: ${o.merchantName}\nInvoice: ${o.id}\n\n${lines}\n\nTotal: Rs.${o.total}\nPayment: ${pm[o.payment]||o.payment}`;
 }
 async function buildInvoicePdf(o){
   const{jsPDF}=window.jspdf;const doc=new jsPDF({unit:'mm',format:'a5'});const W=doc.internal.pageSize.getWidth(),H=doc.internal.pageSize.getHeight();
-  const merchant=getOrderMerchant(o),pm={cash:'Paid - Cash',upi:'Paid - UPI / Online',credit:'Pending - Credit'};
+  const merchant=getOrderMerchant(o),pm={cash:'Paid - Cash',upi:o.paymentStatus==='pending'?'Pending - UPI':'Paid - UPI / Online',credit:'Pending - Credit'};
   const logo=await getInvoiceLogo().catch(()=>null);
   if(logo)doc.addImage(logo,'PNG',12,10,22,22);
   doc.setTextColor(17,17,17);doc.setFont('helvetica','bold');doc.setFontSize(15);doc.text('Mitali Agency',logo?39:12,16);
