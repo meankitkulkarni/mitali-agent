@@ -650,7 +650,7 @@ let MERCHANTS = [];
     const lp=JSON.parse(localStorage.getItem('mb_admin_skus')||'[]');
     const lm=JSON.parse(localStorage.getItem('mb_admin_merchants')||'[]');
     if(lp.length){SKUS.push(...lp.map(p=>({id:p.id,name:p.name,price:p.sale,retail:p.retail||p.sale,stock:p.stock||0,sortOrder:p.sortOrder})));SKUS.sort((a,b)=>((a.sortOrder??999999)-(b.sortOrder??999999))||String(a.name||'').localeCompare(String(b.name||'')));}
-    if(lm.length) MERCHANTS.push(...lm.map(m=>({id:m.id,name:m.name,area:m.area||''})));
+    if(lm.length){MERCHANTS.push(...lm.map(m=>({id:m.id,name:m.name,area:m.area||'',sortOrder:m.sortOrder})));sortMerchants();}
   }catch(e){}
 })();
 
@@ -668,6 +668,9 @@ let holdTimer=null;
 const UPI_QR_FILES=['./assets/qr-code.jpg','./assets/upi-qr.png','./assets/payment-qr.png','./assets/qr.png','./assets/qrcode.png'];
 function sortSkus(){
   SKUS.sort((a,b)=>((a.sortOrder??999999)-(b.sortOrder??999999))||String(a.name||'').localeCompare(String(b.name||'')));
+}
+function sortMerchants(){
+  MERCHANTS.sort((a,b)=>((a.sortOrder??999999)-(b.sortOrder??999999))||String(a.name||'').localeCompare(String(b.name||'')));
 }
 function compactDateKey(d=new Date()){
   return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
@@ -709,7 +712,8 @@ function init() {
   });
   db.collection('merchants').onSnapshot(snap=>{
     const merchs=snap.docs.map(d=>d.data());
-    MERCHANTS.splice(0,MERCHANTS.length,...merchs.map(m=>({id:m.id,name:m.name,area:m.area||'',phone:m.phone||m.whatsapp||''})));
+    MERCHANTS.splice(0,MERCHANTS.length,...merchs.map(m=>({id:m.id,name:m.name,area:m.area||'',phone:m.phone||m.whatsapp||'',sortOrder:m.sortOrder})));
+    sortMerchants();
     renderMerchants();
   });
   db.collection('orders').onSnapshot(snap=>{
