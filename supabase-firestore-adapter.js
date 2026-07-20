@@ -6,7 +6,23 @@
   const client = window.supabase.createClient(cfg.url, cfg.anonKey, {
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
   });
-  const TABLE = "mb_documents";
+
+  const TABLES = {
+    products: "mb_products",
+    merchants: "mb_merchants",
+    orders: "mb_orders",
+    expenses: "mb_expenses",
+    stockEntries: "mb_stock_entries",
+    trays: "mb_trays",
+    openingBal: "mb_opening_balances",
+    dailyDsr: "mb_daily_dsr_snapshots"
+  };
+
+  function tableFor(collectionName) {
+    const table = TABLES[collectionName];
+    if (!table) throw new Error("Unknown collection: " + collectionName);
+    return table;
+  }
 
   function makeDoc(row) {
     return { id: row.id, data: () => ({ id: row.id, ...(row.data || {}) }) };
@@ -18,42 +34,43 @@
 
   async function fetchCollection(collectionName) {
     const { data, error } = await client
-      .from(TABLE)
+      .from(tableFor(collectionName))
       .select("id,data")
-      .eq("collection", collectionName)
+      .is("deleted_at", null)
       .order("updated_at", { ascending: false });
     if (error) throw error;
     return data || [];
   }
 
   function collection(collectionName) {
+    const table = tableFor(collectionName);
     return {
       doc(docId) {
         return {
           async set(value, options) {
             const current = options && options.merge
-              ? await client.from(TABLE).select("data").eq("collection", collectionName).eq("id", docId).maybeSingle()
+              ? await client.from(table).select("data").eq("id", docId).maybeSingle()
               : { data: null, error: null };
             if (current.error) throw current.error;
             const next = options && options.merge
               ? { ...((current.data && current.data.data) || {}), ...(value || {}) }
               : (value || {});
             const { error } = await client
-              .from(TABLE)
-              .upsert({ collection: collectionName, id: docId, data: next }, { onConflict: "collection,id" });
+              .from(table)
+              .upsert({ id: docId, data: next, deleted_at: null }, { onConflict: "id" });
             if (error) throw error;
           },
           async update(value) {
-            const current = await client.from(TABLE).select("data").eq("collection", collectionName).eq("id", docId).maybeSingle();
+            const current = await client.from(table).select("data").eq("id", docId).maybeSingle();
             if (current.error) throw current.error;
             const next = { ...((current.data && current.data.data) || {}), ...(value || {}) };
             const { error } = await client
-              .from(TABLE)
-              .upsert({ collection: collectionName, id: docId, data: next }, { onConflict: "collection,id" });
+              .from(table)
+              .upsert({ id: docId, data: next, deleted_at: null }, { onConflict: "id" });
             if (error) throw error;
           },
           async delete() {
-            const { error } = await client.from(TABLE).delete().eq("collection", collectionName).eq("id", docId);
+            const { error } = await client.from(table).update({ deleted_at: new Date().toISOString() }).eq("id", docId);
             if (error) throw error;
           }
         };
@@ -69,12 +86,7 @@
         emit();
         const channel = client
           .channel("mb-" + collectionName)
-          .on("postgres_changes", {
-            event: "*",
-            schema: "public",
-            table: TABLE,
-            filter: "collection=eq." + collectionName
-          }, emit)
+          .on("postgres_changes", { event: "*", schema: "public", table }, emit)
           .subscribe();
         return () => {
           closed = true;
