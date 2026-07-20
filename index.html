@@ -757,6 +757,7 @@ function buttonIconFor(label){
 }
 function iconizeButton(btn){
   if(!btn||btn.dataset.keepText==='true'||btn.dataset.iconized==='1'||btn.classList.contains('nav-btn')||btn.classList.contains('qty-btn')||btn.classList.contains('rep-qty-btn')||btn.classList.contains('se-qty-btn'))return;
+  if(!btn.closest('table'))return;
   const text=btn.textContent.replace(/\s+/g,' ').trim();
   if(['Cash','UPI','Credit'].includes(text))return;
   const icon=buttonIconFor(text);
@@ -1217,7 +1218,7 @@ function renderOrders(){
         <div class="pay-chip ${o.payment==='cash'?'active-cash':''}" onclick="updatePayment('${o.id}','cash')">Cash</div>
         <div class="pay-chip ${o.payment==='upi'?'active-upi':''}" onclick="updatePayment('${o.id}','upi')">UPI</div>
         <div class="pay-chip ${o.payment==='credit'?'active-credit':''}" onclick="updatePayment('${o.id}','credit')">Credit</div>
-        <div class="pay-chip danger" title="Delete" aria-label="Delete order" onclick="deleteOrder('${o.id}')">${iconSvg('trash')}</div>
+        <div class="pay-chip danger" onclick="deleteOrder('${o.id}')">Delete</div>
       </div>
     </div>`;
   }).join('');
