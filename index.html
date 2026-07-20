@@ -665,6 +665,8 @@ let agentSE  = {};   // populated by Firestore stockEntries listener
 let agentTrays = {}; // populated by Firestore trays listener
 let activeOrder=null, curRepType='replace';
 let holdTimer=null;
+let selectedDueIds=[];
+let collectDuesOnly=false;
 const UPI_QR_FILES=['./assets/qr-code.jpg','./assets/upi-qr.png','./assets/payment-qr.png','./assets/qr.png','./assets/qrcode.png'];
 function sortSkus(){
   SKUS.sort((a,b)=>((a.sortOrder??999999)-(b.sortOrder??999999))||String(a.name||'').localeCompare(String(b.name||'')));
@@ -685,7 +687,6 @@ function nextOrderNumber(prefix='ORD', date=new Date()){
   },0);
   return `${prefix}-${key}-${String(max+1).padStart(3,'0')}`;
 }
-function orderDisplayId(o){return (o&&o.orderNo)||((o&&o.id)||'');}
 
 const NO_NAV=['s-sku','s-review','s-detail','s-upi-pay'];
 
@@ -976,6 +977,22 @@ function paymentLabel(o){
   const base={cash:'Cash',upi:'UPI / Online',credit:'Credit'}[o.payment]||o.payment;
   return o.payment==='upi'&&o.paymentStatus==='pending' ? 'UPI / Awaiting scan' : base;
 }
+function pendingDuesForOrder(o){
+  if(!o)return[];
+  return orders
+    .filter(x=>x.id!==o.id&&x.type!=='retail'&&x.merchantId===o.merchantId&&isPaymentPending(x))
+    .sort((a,b)=>new Date(a.time)-new Date(b.time));
+}
+function selectedDues(){
+  return selectedDueIds.map(id=>orders.find(o=>o.id===id)).filter(Boolean);
+}
+function collectionOrders(){
+  return activeOrder?[activeOrder,...selectedDues()]:[];
+}
+function collectionTotal(){
+  return collectionOrders().reduce((s,o)=>s+Number(o.total||0),0);
+}
+function orderDisplayId(o){return (o&&o.orderNo)||((o&&o.id)||'');}
 
 // ── SAVE ORDER ──
 async function saveOrder(){
@@ -1017,7 +1034,8 @@ async function saveOrder(){
   curOrder={};
   activeOrder=order;
   toast('Order saved');
-  if(order.payment==='upi') openUpiPayment(order.id);
+  selectedDueIds=pendingDuesForOrder(order).map(d=>d.id);
+  if(order.payment==='upi'){collectDuesOnly=false;openUpiPayment(order.id);}
   else openDetail(order.id);
 }
 
@@ -1069,13 +1087,26 @@ async function updatePayment(orderId, newMode) {
   Object.assign(orders[idx],patch);
   try{
     await db.collection('orders').doc(orderId).update(patch);
+    if(newMode==='cash'){
+      const now=patch.paidAt;
+      await Promise.all(selectedDues().map(d=>{
+        const duePatch={payment:'cash',paymentStatus:'received',paidAt:now,receivedMode:'cash',collectedWith:orderId};
+        Object.assign(d,duePatch);
+        return db.collection('orders').doc(d.id).update(duePatch);
+      }));
+      if(selectedDueIds.length){
+        const linkPatch={collectedDueIds:selectedDueIds,collectionTotal:orders[idx].total+selectedDues().reduce((s,d)=>s+d.total,0)};
+        Object.assign(orders[idx],linkPatch);
+        await db.collection('orders').doc(orderId).update(linkPatch);
+      }
+    }
   }catch(err){
     console.error(err);
     toast('Payment update failed');
     return;
   }
   renderOrders(); updateStats();
-  if(newMode==='upi') openUpiPayment(orderId);
+  if(newMode==='upi'){collectDuesOnly=false;openUpiPayment(orderId);}
   else if(newMode==='cash') showPaymentSuccess(orders[idx],()=>openDetail(orderId));
   else openDetail(orderId);
 }
@@ -1083,6 +1114,7 @@ async function updatePayment(orderId, newMode) {
 function openDetail(oid){
   const o=orders.find(x=>x.id===oid); if(!o) return;
   activeOrder=o;
+  selectedDueIds=isPaymentPending(o)||pendingDuesForOrder(o).length?pendingDuesForOrder(o).map(d=>d.id):(o.collectedDueIds||[]);
   const t=new Date(o.time);
   document.getElementById('det-merchant').textContent=o.merchantName;
   document.getElementById('det-time').textContent=
@@ -1100,10 +1132,14 @@ function openDetail(oid){
   document.getElementById('det-status').textContent=paymentStatusText(o);
   const actions=document.getElementById('det-pay-actions');
   if(actions){
+    const dues=pendingDuesForOrder(o);
+    const duesHtml=dues.length?`<div class="review-card" style="margin-top:10px"><div style="padding:12px 16px;border-bottom:1px solid var(--border)"><div class="review-sku">Unpaid Dues</div><div class="review-detail">Attach previous bills to this collection</div></div>${dues.map(d=>`<label class="review-row" style="align-items:center;cursor:pointer"><div style="flex:1"><div class="review-sku">${orderDisplayId(d)}</div><div class="review-detail">${new Date(d.time).toLocaleDateString('en-IN',{day:'numeric',month:'short'})}</div></div><div class="review-amt">Rs. ${d.total}</div><input type="checkbox" ${selectedDueIds.includes(d.id)?'checked':''} onchange="toggleDue('${d.id}',this.checked)" style="width:18px;height:18px;margin-left:10px"/></label>`).join('')}<div class="total-row"><span class="total-label">Collection Total</span><span class="total-val" id="collection-total">Rs. ${collectionTotal()}</span></div></div>`:'';
     if(o.payment==='upi'&&o.paymentStatus==='pending'){
-      actions.innerHTML=`<button class="btn-primary" onclick="openUpiPayment('${o.id}')">Show QR / Mark Received</button><button class="btn-secondary" onclick="updatePayment('${o.id}','cash')">Change to Cash Received</button><button class="btn-secondary" onclick="updatePayment('${o.id}','credit')">Move to Credit</button>`;
+      actions.innerHTML=`${duesHtml}<button class="btn-primary" onclick="openUpiPayment('${o.id}')">Show QR / Mark Received</button><button class="btn-secondary" onclick="updatePayment('${o.id}','cash')">Change to Cash Received</button><button class="btn-secondary" onclick="updatePayment('${o.id}','credit')">Move to Credit</button>`;
     }else if(o.payment==='credit'){
-      actions.innerHTML=`<button class="btn-primary" onclick="updatePayment('${o.id}','upi')">Collect by UPI</button><button class="btn-secondary" onclick="updatePayment('${o.id}','cash')">Mark Cash Received</button>`;
+      actions.innerHTML=`${duesHtml}<button class="btn-primary" onclick="updatePayment('${o.id}','upi')">Collect by UPI</button><button class="btn-secondary" onclick="updatePayment('${o.id}','cash')">Mark Cash Received</button>`;
+    }else if(dues.length){
+      actions.innerHTML=`${duesHtml}<button class="btn-primary" onclick="collectSelectedDues('${o.id}','upi')">Collect Dues by UPI</button><button class="btn-secondary" onclick="collectSelectedDues('${o.id}','cash')">Collect Dues by Cash</button>`;
     }else{
       actions.innerHTML='';
     }
@@ -1111,12 +1147,36 @@ function openDetail(oid){
   showS('s-detail');
 }
 
+function toggleDue(id,checked){
+  selectedDueIds=checked?[...new Set([...selectedDueIds,id])]:selectedDueIds.filter(x=>x!==id);
+  const el=document.getElementById('collection-total');
+  if(el)el.textContent=`Rs. ${collectionTotal()}`;
+}
+
+async function collectSelectedDues(orderId,mode){
+  const host=orders.find(o=>o.id===orderId);
+  if(!host||!selectedDueIds.length)return;
+  if(mode==='upi'){activeOrder=host;collectDuesOnly=true;openUpiPayment(orderId);return;}
+  const now=new Date().toISOString();
+  try{
+    await Promise.all(selectedDues().map(d=>{
+      const duePatch={payment:'cash',paymentStatus:'received',paidAt:now,receivedMode:'cash',collectedWith:orderId};
+      Object.assign(d,duePatch);
+      return db.collection('orders').doc(d.id).update(duePatch);
+    }));
+    const linkPatch={collectedDueIds:selectedDueIds,collectionTotal:host.total+selectedDues().reduce((s,d)=>s+d.total,0)};
+    Object.assign(host,linkPatch);
+    await db.collection('orders').doc(orderId).update(linkPatch);
+    renderOrders();updateStats();showPaymentSuccess(host,()=>openDetail(orderId));
+  }catch(err){console.error(err);toast('Could not collect dues');}
+}
+
 function openUpiPayment(orderId){
   const o=orders.find(x=>x.id===orderId)||activeOrder;
   if(!o) return;
   activeOrder=o;
   document.getElementById('upi-merchant').textContent=o.merchantName;
-  document.getElementById('upi-amount').textContent=`Rs. ${Number(o.total||0).toLocaleString('en-IN')}`;
+  document.getElementById('upi-amount').textContent=`Rs. ${Number(collectionTotal()||0).toLocaleString('en-IN')}`;
   const qr=document.getElementById('upi-qr-img');
   const missing=document.getElementById('upi-qr-missing');
   if(qr&&missing){
@@ -1136,14 +1196,37 @@ function openUpiPayment(orderId){
 function changeUpiMethod(mode){
   if(!activeOrder) return;
   if(mode==='upi') return;
+  if(collectDuesOnly){collectDuesOnly=false;collectSelectedDues(activeOrder.id,mode);return;}
   updatePayment(activeOrder.id,mode);
 }
 
 async function confirmUpiReceived(){
   if(!activeOrder) return;
-  const patch={payment:'upi',paymentStatus:'received',paidAt:new Date().toISOString(),receivedMode:'upi'};
+  const now=new Date().toISOString();
+  if(collectDuesOnly){
+    try{
+      await Promise.all(selectedDues().map(d=>{
+        const duePatch={payment:'upi',paymentStatus:'received',paidAt:now,receivedMode:'upi',collectedWith:activeOrder.id};
+        Object.assign(d,duePatch);
+        return db.collection('orders').doc(d.id).update(duePatch);
+      }));
+      const linkPatch={collectedDueIds:selectedDueIds,collectionTotal:activeOrder.total+selectedDues().reduce((s,d)=>s+d.total,0)};
+      Object.assign(activeOrder,linkPatch);
+      await db.collection('orders').doc(activeOrder.id).update(linkPatch);
+      collectDuesOnly=false;
+      renderOrders();updateStats();
+      showPaymentSuccess(activeOrder,()=>openDetail(activeOrder.id));
+    }catch(err){console.error(err);toast('Could not mark received');}
+    return;
+  }
+  const patch={payment:'upi',paymentStatus:'received',paidAt:now,receivedMode:'upi',collectedDueIds:selectedDueIds,collectionTotal:collectionTotal()};
   try{
     await db.collection('orders').doc(activeOrder.id).update(patch);
+    await Promise.all(selectedDues().map(d=>{
+      const duePatch={payment:'upi',paymentStatus:'received',paidAt:now,receivedMode:'upi',collectedWith:activeOrder.id};
+      Object.assign(d,duePatch);
+      return db.collection('orders').doc(d.id).update(duePatch);
+    }));
   }catch(err){
     console.error(err);
     toast('Could not mark received');
@@ -1158,7 +1241,7 @@ async function confirmUpiReceived(){
 
 function showPaymentSuccess(o,done){
   const layer=document.getElementById('success-layer');
-  document.getElementById('success-sub').textContent=`Rs. ${Number(o.total||0).toLocaleString('en-IN')} received`;
+  document.getElementById('success-sub').textContent=`Rs. ${Number(o.collectionTotal||o.total||0).toLocaleString('en-IN')} received`;
   layer.classList.add('show');
   setTimeout(()=>{
     layer.classList.remove('show');
@@ -1384,10 +1467,16 @@ function invoiceDateKey(o){const d=new Date(o.time);return `${String(d.getDate()
 function invoiceFileName(o){return `invoice_${invoiceDateKey(o)}.pdf`;}
 function getOrderMerchant(o){return MERCHANTS.find(m=>m.id===o.merchantId)||{};}
 function normalizeWhatsAppNumber(raw){let n=String(raw||'').replace(/\D/g,'');if(n.length===10)n='91'+n;return n.length>=11?n:'';}
+function invoiceOrders(o){
+  const ids=(o.collectedDueIds&&o.collectedDueIds.length)?o.collectedDueIds:((activeOrder&&activeOrder.id===o.id)?selectedDueIds:[]);
+  return [o,...ids.map(id=>orders.find(x=>x.id===id)).filter(Boolean)];
+}
 function invoiceMessage(o){
   const pm={cash:'Cash collected',upi:o.paymentStatus==='pending'?'UPI awaiting payment':'UPI paid',credit:'Credit pending'};
-  const lines=o.items.map(it=>`- ${it.skuName}: ${it.qty} x Rs.${it.price} = Rs.${it.amount}`).join('\n');
-  return `Mitali Agency - Modern Bread Invoice\nDate: ${invoiceDateKey(o)}\nMerchant: ${o.merchantName}\nInvoice: ${orderDisplayId(o)}\n\n${lines}\n\nTotal: Rs.${o.total}\nPayment: ${pm[o.payment]||o.payment}`;
+  const invs=invoiceOrders(o);
+  const lines=invs.map(inv=>`${orderDisplayId(inv)} (${new Date(inv.time).toLocaleDateString('en-IN',{day:'numeric',month:'short'})})\n`+inv.items.map(it=>`- ${it.skuName}: ${it.qty} x Rs.${it.price} = Rs.${it.amount}`).join('\n')+`\nSubtotal: Rs.${inv.total}`).join('\n\n');
+  const total=invs.reduce((s,inv)=>s+Number(inv.total||0),0);
+  return `Mitali Agency - Modern Bread Invoice\nDate: ${invoiceDateKey(o)}\nMerchant: ${o.merchantName}\nInvoice: ${orderDisplayId(o)}\n\n${lines}\n\nCollection Total: Rs.${total}\nPayment: ${pm[o.payment]||o.payment}`;
 }
 async function buildInvoicePdf(o){
   const{jsPDF}=window.jspdf;const doc=new jsPDF({unit:'mm',format:'a5'});const W=doc.internal.pageSize.getWidth(),H=doc.internal.pageSize.getHeight();
@@ -1402,8 +1491,9 @@ async function buildInvoicePdf(o){
   doc.setTextColor(17,17,17);doc.setFont('helvetica','bold');doc.setFontSize(9);doc.text('Bill To',12,45);doc.text('Payment',W-58,45);
   doc.setFont('helvetica','normal');doc.setFontSize(9);doc.text(o.merchantName,12,51);if(merchant.area)doc.text(merchant.area,12,56);if(merchant.phone)doc.text(`WhatsApp: ${merchant.phone}`,12,61);
   doc.text(pm[o.payment]||o.payment,W-58,51);
-  const body=[];o.items.forEach(it=>{body.push([it.skuName,it.qty,`Rs.${it.price}`,`Rs.${it.amount}`]);if(it.rep)body.push([it.rep.type==='replace'?`Replacement: ${it.rep.qty} units swapped`:`Replacement deduct (${it.rep.qty})`,'','',it.rep.type==='deduct'?`-Rs.${it.rep.deductAmt}`:'']);});
-  doc.autoTable({startY:70,head:[['Product','Qty','Rate','Amount']],body,foot:[[{content:'Grand Total',colSpan:3,styles:{halign:'right'}},`Rs.${o.total}`]],headStyles:{fillColor:[23,23,23],textColor:255,fontStyle:'bold',fontSize:8},bodyStyles:{fontSize:8,textColor:[30,30,30]},footStyles:{fillColor:[245,245,245],textColor:[17,17,17],fontStyle:'bold',fontSize:9},alternateRowStyles:{fillColor:[252,252,252]},columnStyles:{1:{halign:'center',cellWidth:14},2:{halign:'right',cellWidth:23},3:{halign:'right',cellWidth:27}},margin:{left:12,right:12},styles:{font:'helvetica',cellPadding:3}});
+  const invs=invoiceOrders(o),body=[];invs.forEach((inv,idx)=>{if(idx>0)body.push([{content:`Previous bill: ${orderDisplayId(inv)} (${new Date(inv.time).toLocaleDateString('en-IN',{day:'numeric',month:'short'})})`,colSpan:4,styles:{fontStyle:'bold',fillColor:[250,250,250]}}]);inv.items.forEach(it=>{body.push([it.skuName,it.qty,`Rs.${it.price}`,`Rs.${it.amount}`]);if(it.rep)body.push([it.rep.type==='replace'?`Replacement: ${it.rep.qty} units swapped`:`Replacement deduct (${it.rep.qty})`,'','',it.rep.type==='deduct'?`-Rs.${it.rep.deductAmt}`:'']);});if(invs.length>1)body.push([{content:`Subtotal ${orderDisplayId(inv)}`,colSpan:3,styles:{halign:'right',fontStyle:'bold'}},`Rs.${inv.total}`]);});
+  const invoiceTotal=invs.reduce((s,inv)=>s+Number(inv.total||0),0);
+  doc.autoTable({startY:70,head:[['Product','Qty','Rate','Amount']],body,foot:[[{content:'Collection Total',colSpan:3,styles:{halign:'right'}},`Rs.${invoiceTotal}`]],headStyles:{fillColor:[23,23,23],textColor:255,fontStyle:'bold',fontSize:8},bodyStyles:{fontSize:8,textColor:[30,30,30]},footStyles:{fillColor:[245,245,245],textColor:[17,17,17],fontStyle:'bold',fontSize:9},alternateRowStyles:{fillColor:[252,252,252]},columnStyles:{1:{halign:'center',cellWidth:14},2:{halign:'right',cellWidth:23},3:{halign:'right',cellWidth:27}},margin:{left:12,right:12},styles:{font:'helvetica',cellPadding:3}});
   if(o.note){doc.setFontSize(8);doc.setTextColor(90,90,90);doc.text(`Note: ${o.note}`,12,doc.lastAutoTable.finalY+8);}
   doc.setDrawColor(230,230,230);doc.line(12,H-18,W-12,H-18);doc.setFontSize(7);doc.setTextColor(120,120,120);doc.text('Thank you for your business.',W/2,H-11,{align:'center'});
   return doc;
