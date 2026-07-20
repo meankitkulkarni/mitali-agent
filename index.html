@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
-<title>ModernBread Agent</title>
+<title>Mitali Agency | Agent</title>
 <link rel="icon" type="image/png" href="./assets/mitali-logo.png"/>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
@@ -278,6 +278,15 @@ select.form-field{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
 .tray-inp::-webkit-outer-spin-button,.tray-inp::-webkit-inner-spin-button{-webkit-appearance:none}
 /* ── TODAY'S RECEIVED BADGE ── */
 .stock-received{margin-top:8px;padding:6px 10px;background:var(--info-bg);border-radius:var(--rsm);display:flex;justify-content:space-between;align-items:center}
+.stock-sticky-action{position:sticky;top:0;z-index:20;background:rgba(250,250,249,.96);backdrop-filter:blur(10px);padding:10px 16px;border-bottom:1px solid var(--border)}
+.stock-rep-btn{width:100%;display:flex;align-items:center;justify-content:center;gap:8px;background:var(--bg);border:1.5px solid var(--border2);border-radius:var(--r);padding:11px 14px;font-family:'Inter',sans-serif;font-size:13px;font-weight:700;color:var(--text);cursor:pointer}
+.stock-rep-btn svg{width:16px;height:16px;stroke-width:2}
+.rep-summary-row{display:flex;justify-content:space-between;align-items:center;padding:11px 0;border-bottom:1px solid var(--border)}
+.rep-summary-row:last-child{border-bottom:none}
+.rep-summary-name{font-size:14px;font-weight:700}
+.rep-summary-sub{font-size:12px;color:var(--text2);margin-top:2px}
+.rep-summary-val{text-align:right;font-family:monospace;font-size:15px;font-weight:800;color:var(--warn-text)}
+.rep-detail-line{font-size:12px;color:var(--text2);margin-top:5px}
 .stock-received-lbl{font-size:11px;color:var(--info-text);font-weight:500}
 .stock-received-val{font-size:12px;color:var(--info-text);font-weight:700;font-family:monospace}
 
@@ -548,6 +557,12 @@ select.form-field{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
     <button onclick="openStockEntry()" style="margin-left:auto;background:var(--text);color:#fff;border:none;border-radius:10px;padding:8px 14px;font-size:13px;font-weight:600;font-family:'Inter',sans-serif;cursor:pointer;white-space:nowrap">+ Add Stock</button>
   </div>
   <div class="scroll-area">
+    <div class="stock-sticky-action">
+      <button class="stock-rep-btn" onclick="openReplacementSheet()" data-keep-text="true">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+        Today's Replacements
+      </button>
+    </div>
     <div id="stock-received-bar" style="display:none;margin:12px 16px 0;padding:10px 14px;background:var(--info-bg);border:1px solid #bfdbfe;border-radius:var(--r)">
       <div style="font-size:11px;font-weight:600;color:var(--info-text);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Received Today</div>
       <div id="stock-received-items" style="display:flex;flex-wrap:wrap;gap:6px"></div>
@@ -561,6 +576,17 @@ select.form-field{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://
 </div>
 
 <!-- ═══ EXPENSES ═══ -->
+<div class="sheet-overlay" id="replacement-sheet-overlay" onclick="closeReplacementSheet()"></div>
+<div class="bottom-sheet" id="replacement-sheet">
+  <div class="sheet-handle"></div>
+  <div class="sheet-hdr">
+    <div class="sheet-title">Today's Replacements</div>
+    <div class="sheet-sub" id="replacement-sheet-sub"></div>
+  </div>
+  <div class="sheet-scroll" id="replacement-sheet-body"></div>
+  <div class="sheet-foot"><button class="btn-secondary" onclick="closeReplacementSheet()" data-keep-text="true">Close</button></div>
+</div>
+
 <div id="s-expenses" class="screen">
   <div class="topbar">
     <div class="topbar-info">
@@ -730,7 +756,7 @@ function buttonIconFor(label){
   return '';
 }
 function iconizeButton(btn){
-  if(!btn||btn.dataset.iconized==='1'||btn.classList.contains('nav-btn')||btn.classList.contains('qty-btn')||btn.classList.contains('rep-qty-btn')||btn.classList.contains('se-qty-btn'))return;
+  if(!btn||btn.dataset.keepText==='true'||btn.dataset.iconized==='1'||btn.classList.contains('nav-btn')||btn.classList.contains('qty-btn')||btn.classList.contains('rep-qty-btn')||btn.classList.contains('se-qty-btn'))return;
   const text=btn.textContent.replace(/\s+/g,' ').trim();
   if(['Cash','UPI','Credit'].includes(text))return;
   const icon=buttonIconFor(text);
@@ -845,6 +871,7 @@ function goHome() {
   showS('s-home');
 }
 function appBack(){
+  if(document.getElementById('replacement-sheet')?.classList.contains('open')){closeReplacementSheet();return;}
   if(document.getElementById('stock-sheet')?.classList.contains('open')){closeStockEntry();return;}
   if(currentScreen==='s-upi-pay'){openDetail(activeOrder&&activeOrder.id);return;}
   if(currentScreen==='s-detail'){showS('s-orders');return;}
@@ -993,12 +1020,7 @@ function onRepToggle(){
   const on=document.getElementById('rep-chk').checked;
   document.getElementById('rep-body').style.display=on?'block':'none';
   if(!on) document.getElementById('rep-qty').value=0;
-  // Auto-select deduct if stock not available for this SKU
-  if(on){
-    const sku=SKUS[curSKUIdx];
-    const avail=stockMap[sku.id]??sku.stock;
-    if(avail<=0){ curRepType='deduct'; syncRepPills(); }
-  }
+  if(on){ curRepType='replace'; syncRepPills(); }
   saveSKU(); calcSubtotal(); calcRepImpact();
 }
 function setRepType(t){
@@ -1416,6 +1438,37 @@ function renderStock(){
 }
 
 // ── STOCK ENTRY BOTTOM SHEET ──
+function todayReplacementRows(){
+  const map={};
+  orders.filter(isToday).forEach(o=>o.items.forEach(it=>{
+    if(!it.rep||!it.rep.qty)return;
+    const sku=SKUS.find(s=>s.id===it.skuId);
+    const key=it.skuId||it.skuName;
+    if(!map[key])map[key]={name:it.skuName,code:sku?.code||'',qty:0,value:0,lines:[]};
+    const qty=Number(it.rep.qty||0);
+    const rate=Number(it.price||sku?.price||0);
+    map[key].qty+=qty;
+    map[key].value+=qty*rate;
+    map[key].lines.push({merchant:o.merchantName,invoice:orderDisplayId(o),qty,type:it.rep.type});
+  }));
+  return Object.values(map).sort((a,b)=>b.qty-a.qty||a.name.localeCompare(b.name));
+}
+function openReplacementSheet(){
+  const rows=todayReplacementRows();
+  const totalQty=rows.reduce((s,r)=>s+r.qty,0);
+  const totalVal=rows.reduce((s,r)=>s+r.value,0);
+  document.getElementById('replacement-sheet-sub').textContent=`${totalQty} unit${totalQty!==1?'s':''} replaced today · Rs. ${totalVal.toLocaleString('en-IN')}`;
+  document.getElementById('replacement-sheet-body').innerHTML=rows.length
+    ?rows.map(r=>`<div class="rep-summary-row"><div><div class="rep-summary-name">${r.name}</div><div class="rep-summary-sub">${r.code||'No DSR code'}</div>${r.lines.map(l=>`<div class="rep-detail-line">${l.merchant} · ${l.invoice} · ${l.qty} unit${l.qty!==1?'s':''}${l.type==='deduct'?' · deduct':''}</div>`).join('')}</div><div class="rep-summary-val">${r.qty}<br><span style="font-size:12px;color:var(--danger-text)">Rs.${r.value.toLocaleString('en-IN')}</span></div></div>`).join('')
+    :`<div class="empty-state"><div class="empty-title">No replacements today</div><div class="empty-desc">Product-wise replacements will appear here after orders are saved.</div></div>`;
+  document.getElementById('replacement-sheet-overlay').classList.add('open');
+  document.getElementById('replacement-sheet').classList.add('open');
+}
+function closeReplacementSheet(){
+  document.getElementById('replacement-sheet-overlay').classList.remove('open');
+  document.getElementById('replacement-sheet').classList.remove('open');
+}
+
 function openStockEntry(){
   if(!SKUS.length){toast('No products configured. Contact admin.');return;}
   const todayKey=new Date().toISOString().slice(0,10);
