@@ -777,12 +777,25 @@ function startButtonIconizer(){
   })));
   mo.observe(document.body,{childList:true,subtree:true});
 }
+function startNumberInputCleaner(){
+  document.addEventListener('focusin',e=>{
+    const el=e.target;
+    if(el&&el.matches&&el.matches('input[type="number"]')&&el.value==='0')el.value='';
+  });
+  document.addEventListener('input',e=>{
+    const el=e.target;
+    if(!el||!el.matches||!el.matches('input[type="number"]'))return;
+    const v=String(el.value);
+    if(/^0+\d/.test(v))el.value=v.replace(/^0+/,'');
+  });
+}
 
 // ════════════════════════════════════
 // BOOT
 // ════════════════════════════════════
 function init() {
   startButtonIconizer();
+  startNumberInputCleaner();
   history.replaceState({screen:'s-home'},'',location.href);
   const now = new Date();
   const todayKey=now.toISOString().slice(0,10);
